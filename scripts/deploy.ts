@@ -1,48 +1,61 @@
 import { ethers } from "hardhat";
+import * as fs from "fs";
+import * as path from "path";
 
 async function main() {
-  // Get the deployer's address
   const [deployer] = await ethers.getSigners();
   console.log("Deploying contracts with the account:", deployer.address);
 
-  // Deploy the CarbonCredit contract first
+  // Deploy the CarbonCredit ERC-20 contract
   const CarbonCredit = await ethers.getContractFactory("CarbonCredit");
   const carbonCredit = await CarbonCredit.deploy(deployer.address);
   await carbonCredit.waitForDeployment();
-  
+
   const carbonCreditAddress = await carbonCredit.getAddress();
-  console.log("CarbonCredit deployed to:", carbonCreditAddress);
+  console.log("CarbonCredit (ERC-20) deployed to:", carbonCreditAddress);
 
-  // For this example, we'll assume you have a mock XRPL token deployed
-  // In practice, you would either:
-  // 1. Deploy a new mock XRPL token for testing
-  // 2. Use an existing XRPL token address on mainnet
-  // Here's how to deploy a mock token (uncomment if needed):
-  /*
-  const MockXRPL = await ethers.getContractFactory("MockXRPL");
-  const mockXRPL = await MockXRPL.deploy();
-  await mockXRPL.waitForDeployment();
-  const xrplTokenAddress = await mockXRPL.getAddress();
-  */
-  // For now, we'll use a placeholder address - replace this with your actual XRPL token address
-  const xrplTokenAddress = "0x39fBBABf11738317a448031930706cd3e612e1B9"; // Replace with actual address
+  // XRPL token address — replace with actual address on your network
+  const xrplTokenAddress = "0x39fBBABf11738317a448031930706cd3e612e1B9";
 
-  // Deploy the CarbonCreditMarketplace contract
+  // Initial prices (in XRPL token wei — 18 decimals)
+  // e.g. 100 XRPL tokens per carbon credit
+  const initialBuyPrice = ethers.parseUnits("100", 18);
+  const initialSellPrice = ethers.parseUnits("80", 18);
+
+  // Deploy the CarbonCreditMarketplace
   const CarbonCreditMarketplace = await ethers.getContractFactory("CarbonCreditMarketplace");
   const marketplace = await CarbonCreditMarketplace.deploy(
     carbonCreditAddress,
-    xrplTokenAddress
+    xrplTokenAddress,
+    initialBuyPrice,
+    initialSellPrice
   );
   await marketplace.waitForDeployment();
 
   const marketplaceAddress = await marketplace.getAddress();
   console.log("CarbonCreditMarketplace deployed to:", marketplaceAddress);
 
-  console.log("Deployment completed!");
+  // Seed the marketplace with initial credits
+  const seedAmount = 1000;
+  const mintTx = await carbonCredit.mintCredits(marketplaceAddress, seedAmount);
+  await mintTx.wait();
+  console.log(`Minted ${seedAmount} credits to marketplace`);
+
+  // Write deployed addresses to frontend so App.js always has the right ones
+  const addresses = {
+    CARBON_CREDIT_ADDRESS: carbonCreditAddress,
+    MARKETPLACE_ADDRESS: marketplaceAddress,
+    XRPL_TOKEN_ADDRESS: xrplTokenAddress
+  };
+  const outPath = path.join(__dirname, "..", "frontend", "carbon-trading", "src", "contracts", "deployed-addresses.json");
+  fs.writeFileSync(outPath, JSON.stringify(addresses, null, 2));
+  console.log("Wrote deployed addresses to:", outPath);
+
+  console.log("\nDeployment completed!");
+  console.log("Buy price:", ethers.formatUnits(initialBuyPrice, 18), "XRPL per credit");
+  console.log("Sell price:", ethers.formatUnits(initialSellPrice, 18), "XRPL per credit");
 }
 
-// We recommend this pattern to be able to use async/await everywhere
-// and properly handle errors.
 main().catch((error) => {
   console.error(error);
   process.exitCode = 1;

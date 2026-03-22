@@ -21,37 +21,23 @@ import type {
   TypedLogDescription,
   TypedListener,
   TypedContractMethod,
-} from "../common";
+} from "../../../../common";
 
-export interface CarbonCreditInterface extends Interface {
+export interface ERC20Interface extends Interface {
   getFunction(
     nameOrSignature:
       | "allowance"
       | "approve"
       | "balanceOf"
       | "decimals"
-      | "getRedemptionsByEmission"
-      | "mintCredits"
       | "name"
-      | "owner"
-      | "redeemCredits"
-      | "redemptionsByEmission"
-      | "renounceOwnership"
       | "symbol"
-      | "totalRedeemed"
       | "totalSupply"
       | "transfer"
       | "transferFrom"
-      | "transferOwnership"
   ): FunctionFragment;
 
-  getEvent(
-    nameOrSignatureOrTopic:
-      | "Approval"
-      | "CreditsRedeemed"
-      | "OwnershipTransferred"
-      | "Transfer"
-  ): EventFragment;
+  getEvent(nameOrSignatureOrTopic: "Approval" | "Transfer"): EventFragment;
 
   encodeFunctionData(
     functionFragment: "allowance",
@@ -66,33 +52,8 @@ export interface CarbonCreditInterface extends Interface {
     values: [AddressLike]
   ): string;
   encodeFunctionData(functionFragment: "decimals", values?: undefined): string;
-  encodeFunctionData(
-    functionFragment: "getRedemptionsByEmission",
-    values: [string]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "mintCredits",
-    values: [AddressLike, BigNumberish]
-  ): string;
   encodeFunctionData(functionFragment: "name", values?: undefined): string;
-  encodeFunctionData(functionFragment: "owner", values?: undefined): string;
-  encodeFunctionData(
-    functionFragment: "redeemCredits",
-    values: [BigNumberish, string]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "redemptionsByEmission",
-    values: [string]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "renounceOwnership",
-    values?: undefined
-  ): string;
   encodeFunctionData(functionFragment: "symbol", values?: undefined): string;
-  encodeFunctionData(
-    functionFragment: "totalRedeemed",
-    values: [AddressLike]
-  ): string;
   encodeFunctionData(
     functionFragment: "totalSupply",
     values?: undefined
@@ -105,42 +66,13 @@ export interface CarbonCreditInterface extends Interface {
     functionFragment: "transferFrom",
     values: [AddressLike, AddressLike, BigNumberish]
   ): string;
-  encodeFunctionData(
-    functionFragment: "transferOwnership",
-    values: [AddressLike]
-  ): string;
 
   decodeFunctionResult(functionFragment: "allowance", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "approve", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "decimals", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "getRedemptionsByEmission",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "mintCredits",
-    data: BytesLike
-  ): Result;
   decodeFunctionResult(functionFragment: "name", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "redeemCredits",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "redemptionsByEmission",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "renounceOwnership",
-    data: BytesLike
-  ): Result;
   decodeFunctionResult(functionFragment: "symbol", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "totalRedeemed",
-    data: BytesLike
-  ): Result;
   decodeFunctionResult(
     functionFragment: "totalSupply",
     data: BytesLike
@@ -148,10 +80,6 @@ export interface CarbonCreditInterface extends Interface {
   decodeFunctionResult(functionFragment: "transfer", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "transferFrom",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "transferOwnership",
     data: BytesLike
   ): Result;
 }
@@ -167,41 +95,6 @@ export namespace ApprovalEvent {
     owner: string;
     spender: string;
     value: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace CreditsRedeemedEvent {
-  export type InputTuple = [
-    redeemer: AddressLike,
-    amount: BigNumberish,
-    emissionId: string
-  ];
-  export type OutputTuple = [
-    redeemer: string,
-    amount: bigint,
-    emissionId: string
-  ];
-  export interface OutputObject {
-    redeemer: string;
-    amount: bigint;
-    emissionId: string;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace OwnershipTransferredEvent {
-  export type InputTuple = [previousOwner: AddressLike, newOwner: AddressLike];
-  export type OutputTuple = [previousOwner: string, newOwner: string];
-  export interface OutputObject {
-    previousOwner: string;
-    newOwner: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -227,11 +120,11 @@ export namespace TransferEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export interface CarbonCredit extends BaseContract {
-  connect(runner?: ContractRunner | null): CarbonCredit;
+export interface ERC20 extends BaseContract {
+  connect(runner?: ContractRunner | null): ERC20;
   waitForDeployment(): Promise<this>;
 
-  interface: CarbonCreditInterface;
+  interface: ERC20Interface;
 
   queryFilter<TCEvent extends TypedContractEvent>(
     event: TCEvent,
@@ -286,35 +179,9 @@ export interface CarbonCredit extends BaseContract {
 
   decimals: TypedContractMethod<[], [bigint], "view">;
 
-  getRedemptionsByEmission: TypedContractMethod<
-    [emissionId: string],
-    [bigint],
-    "view"
-  >;
-
-  mintCredits: TypedContractMethod<
-    [to: AddressLike, amount: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
-
   name: TypedContractMethod<[], [string], "view">;
 
-  owner: TypedContractMethod<[], [string], "view">;
-
-  redeemCredits: TypedContractMethod<
-    [amount: BigNumberish, emissionId: string],
-    [void],
-    "nonpayable"
-  >;
-
-  redemptionsByEmission: TypedContractMethod<[arg0: string], [bigint], "view">;
-
-  renounceOwnership: TypedContractMethod<[], [void], "nonpayable">;
-
   symbol: TypedContractMethod<[], [string], "view">;
-
-  totalRedeemed: TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
 
   totalSupply: TypedContractMethod<[], [bigint], "view">;
 
@@ -327,12 +194,6 @@ export interface CarbonCredit extends BaseContract {
   transferFrom: TypedContractMethod<
     [from: AddressLike, to: AddressLike, value: BigNumberish],
     [boolean],
-    "nonpayable"
-  >;
-
-  transferOwnership: TypedContractMethod<
-    [newOwner: AddressLike],
-    [void],
     "nonpayable"
   >;
 
@@ -361,40 +222,11 @@ export interface CarbonCredit extends BaseContract {
     nameOrSignature: "decimals"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
-    nameOrSignature: "getRedemptionsByEmission"
-  ): TypedContractMethod<[emissionId: string], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "mintCredits"
-  ): TypedContractMethod<
-    [to: AddressLike, amount: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
-  getFunction(
     nameOrSignature: "name"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
-    nameOrSignature: "owner"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "redeemCredits"
-  ): TypedContractMethod<
-    [amount: BigNumberish, emissionId: string],
-    [void],
-    "nonpayable"
-  >;
-  getFunction(
-    nameOrSignature: "redemptionsByEmission"
-  ): TypedContractMethod<[arg0: string], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "renounceOwnership"
-  ): TypedContractMethod<[], [void], "nonpayable">;
-  getFunction(
     nameOrSignature: "symbol"
   ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "totalRedeemed"
-  ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
   getFunction(
     nameOrSignature: "totalSupply"
   ): TypedContractMethod<[], [bigint], "view">;
@@ -412,9 +244,6 @@ export interface CarbonCredit extends BaseContract {
     [boolean],
     "nonpayable"
   >;
-  getFunction(
-    nameOrSignature: "transferOwnership"
-  ): TypedContractMethod<[newOwner: AddressLike], [void], "nonpayable">;
 
   getEvent(
     key: "Approval"
@@ -422,20 +251,6 @@ export interface CarbonCredit extends BaseContract {
     ApprovalEvent.InputTuple,
     ApprovalEvent.OutputTuple,
     ApprovalEvent.OutputObject
-  >;
-  getEvent(
-    key: "CreditsRedeemed"
-  ): TypedContractEvent<
-    CreditsRedeemedEvent.InputTuple,
-    CreditsRedeemedEvent.OutputTuple,
-    CreditsRedeemedEvent.OutputObject
-  >;
-  getEvent(
-    key: "OwnershipTransferred"
-  ): TypedContractEvent<
-    OwnershipTransferredEvent.InputTuple,
-    OwnershipTransferredEvent.OutputTuple,
-    OwnershipTransferredEvent.OutputObject
   >;
   getEvent(
     key: "Transfer"
@@ -455,28 +270,6 @@ export interface CarbonCredit extends BaseContract {
       ApprovalEvent.InputTuple,
       ApprovalEvent.OutputTuple,
       ApprovalEvent.OutputObject
-    >;
-
-    "CreditsRedeemed(address,uint256,string)": TypedContractEvent<
-      CreditsRedeemedEvent.InputTuple,
-      CreditsRedeemedEvent.OutputTuple,
-      CreditsRedeemedEvent.OutputObject
-    >;
-    CreditsRedeemed: TypedContractEvent<
-      CreditsRedeemedEvent.InputTuple,
-      CreditsRedeemedEvent.OutputTuple,
-      CreditsRedeemedEvent.OutputObject
-    >;
-
-    "OwnershipTransferred(address,address)": TypedContractEvent<
-      OwnershipTransferredEvent.InputTuple,
-      OwnershipTransferredEvent.OutputTuple,
-      OwnershipTransferredEvent.OutputObject
-    >;
-    OwnershipTransferred: TypedContractEvent<
-      OwnershipTransferredEvent.InputTuple,
-      OwnershipTransferredEvent.OutputTuple,
-      OwnershipTransferredEvent.OutputObject
     >;
 
     "Transfer(address,address,uint256)": TypedContractEvent<

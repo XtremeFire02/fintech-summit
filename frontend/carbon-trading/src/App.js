@@ -1,10 +1,10 @@
+/* eslint-env es2020 */
 import React, { useState, useEffect, useRef } from "react";
 import {
   BrowserProvider,
   Contract,
   parseUnits,
-  formatUnits,
-  formatEther
+  formatUnits
 } from "ethers";
 import "bootstrap/dist/css/bootstrap.min.css";
 import { Modal, Button } from "react-bootstrap";
@@ -38,8 +38,16 @@ ChartJS.register(
   Legend
 );
 
-const CARBON_CREDIT_ADDRESS = "0x5fbdb2315678afecb367f032d93f642f64180aa3";
-const MARKETPLACE_ADDRESS = "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512";
+// These addresses are set by deploy.ts — update after each redeployment
+const CARBON_CREDIT_ADDRESS = "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9";
+const MARKETPLACE_ADDRESS = "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9";
+const XRPL_TOKEN_ADDRESS = "0x39fBBABf11738317a448031930706cd3e612e1B9";
+
+const ERC20_ABI = [
+  "function approve(address spender, uint256 amount) external returns (bool)",
+  "function allowance(address owner, address spender) external view returns (uint256)",
+  "function balanceOf(address account) external view returns (uint256)"
+];
 
 const priceHistoryData = [
   { timestamp: 1704067200, price: "95" },
@@ -79,25 +87,22 @@ function App() {
   const [provider, setProvider] = useState(null);
   const [carbonCreditContract, setCarbonCreditContract] = useState(null);
   const [marketplaceContract, setMarketplaceContract] = useState(null);
+  const [xrplTokenContract, setXrplTokenContract] = useState(null);
   const [batchMintNumber, setBatchMintNumber] = useState("1");
-  const [batchMintUri, setBatchMintUri] = useState("");
-  const [redeemTokenId, setRedeemTokenId] = useState("");
-  const [redeemEmissionId, setRedeemEmissionId] = useState("");
-  const [listTokenId, setListTokenId] = useState("");
-  const [listPrice, setListPrice] = useState("");
-  const [buyTokenId, setBuyTokenId] = useState("");
-  const [buyOfferPrice, setBuyOfferPrice] = useState("");
-  const [listings, setListings] = useState([]);
-  const [ownerAddressQuery, setOwnerAddressQuery] = useState("");
-  const [ownerTokens, setOwnerTokens] = useState([]);
   const [mintToAddress, setMintToAddress] = useState("");
-  const defaultBaseUri = "https://example.com/metadata/";
+  const [redeemAmount, setRedeemAmount] = useState("");
+  const [redeemEmissionId, setRedeemEmissionId] = useState("");
+  const [buyAmount, setBuyAmount] = useState("");
+  const [sellAmount, setSellAmount] = useState("");
+  const [creditBalance, setCreditBalance] = useState("");
+  const [xrplBalance, setXrplBalance] = useState("");
+  const [marketplaceInfo, setMarketplaceInfo] = useState(null);
+  const [ownerAddressQuery, setOwnerAddressQuery] = useState("");
+  const [queriedBalance, setQueriedBalance] = useState("");
   const [currentUserAddress, setCurrentUserAddress] = useState("");
-  const [currentUserBalance, setCurrentUserBalance] = useState("");
   const [contractOwnerAddress, setContractOwnerAddress] = useState("");
-  const [queriedTokenId, setQueriedTokenId] = useState("");
-  const [queriedTokenOwner, setQueriedTokenOwner] = useState("");
-  const [marketplaceCreditCount, setMarketplaceCreditCount] = useState("");
+  const [setBuyPriceInput, setSetBuyPriceInput] = useState("");
+  const [setSellPriceInput, setSetSellPriceInput] = useState("");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState("home");
   const [showModal, setShowModal] = useState(false);
@@ -114,39 +119,94 @@ function App() {
     contractOwnerAddress &&
     currentUserAddress.toLowerCase() === contractOwnerAddress.toLowerCase();
 
-  useEffect(() => {
-    const init = async () => {
-      if (!window.ethereum) {
-        console.error("MetaMask not detected!");
-        return;
-      }
+  const [walletError, setWalletError] = useState("");
+
+  const connectWallet = async () => {
+    if (!window.ethereum) {
+      setWalletError("MetaMask not detected!");
+      return;
+    }
+    try {
+      // Switch to Hardhat localhost network (chain ID 31337 = 0x7A69)
       try {
-        await window.ethereum.request({ method: "eth_requestAccounts" });
-        const _provider = new BrowserProvider(window.ethereum);
-        const _signer = await _provider.getSigner();
-        const ccContract = new Contract(
-          CARBON_CREDIT_ADDRESS,
-          carbonCreditABI.abi,
-          _signer
-        );
-        const mpContract = new Contract(
-          MARKETPLACE_ADDRESS,
-          marketplaceABI.abi,
-          _signer
-        );
-        setSigner(_signer);
-        setProvider(_provider);
-        setCarbonCreditContract(ccContract);
-        setMarketplaceContract(mpContract);
-        const addr = await _signer.getAddress();
-        setCurrentUserAddress(addr);
-        const owner = await ccContract.owner();
-        setContractOwnerAddress(owner);
-      } catch (err) {
-        console.error("Error initializing wallet:", err);
+        await window.ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: "0x7A69" }]
+        });
+      } catch (switchErr) {
+        // If network doesn't exist in MetaMask, add it
+        if (switchErr.code === 4902) {
+          await window.ethereum.request({
+            method: "wallet_addEthereumChain",
+            params: [{
+              chainId: "0x7A69",
+              chainName: "Hardhat Local",
+              rpcUrls: ["http://127.0.0.1:8545"],
+              nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }
+            }]
+          });
+        }
       }
-    };
-    init();
+
+      await window.ethereum.request({ method: "eth_requestAccounts" });
+      const _provider = new BrowserProvider(window.ethereum);
+
+      const network = await _provider.getNetwork();
+      console.log("Connected to chain ID:", network.chainId.toString());
+
+      const _signer = await _provider.getSigner();
+      const ccContract = new Contract(
+        CARBON_CREDIT_ADDRESS,
+        carbonCreditABI.abi,
+        _signer
+      );
+      const mpContract = new Contract(
+        MARKETPLACE_ADDRESS,
+        marketplaceABI.abi,
+        _signer
+      );
+      const xrplContract = new Contract(
+        XRPL_TOKEN_ADDRESS,
+        ERC20_ABI,
+        _signer
+      );
+      setSigner(_signer);
+      setProvider(_provider);
+      setCarbonCreditContract(ccContract);
+      setMarketplaceContract(mpContract);
+      setXrplTokenContract(xrplContract);
+
+      const addr = await _signer.getAddress();
+      setCurrentUserAddress(addr);
+
+      const owner = await ccContract.owner();
+      setContractOwnerAddress(owner);
+      setWalletError("");
+    } catch (err) {
+      console.error("Error connecting wallet:", err);
+      setWalletError(err.message || String(err));
+    }
+  };
+
+  useEffect(() => {
+    connectWallet();
+
+    // Update state when user switches accounts in MetaMask
+    if (window.ethereum) {
+      const handleAccountsChanged = (accounts) => {
+        if (accounts.length > 0) {
+          setCurrentUserAddress(accounts[0]);
+          connectWallet();
+        } else {
+          setCurrentUserAddress("");
+          setSigner(null);
+        }
+      };
+      window.ethereum.on("accountsChanged", handleAccountsChanged);
+      return () => {
+        window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
+      };
+    }
   }, []);
 
   const handleShowPopup = (title, message) => {
@@ -155,170 +215,201 @@ function App() {
     setShowModal(true);
   };
 
-  const handleListForSale = async () => {
+  const fetchMarketplaceInfo = async () => {
     if (!marketplaceContract) return;
     try {
-      const priceBN = parseUnits(listPrice, 18);
-      const tx = await marketplaceContract.listCreditForSale(listTokenId, priceBN);
-      await tx.wait();
-      handleShowPopup(
-        "Success!",
-        `Token #${listTokenId} was listed for sale at ${listPrice} XRPL tokens.`
-      );
+      const info = await marketplaceContract.getMarketplaceInfo();
+      setMarketplaceInfo({
+        creditBalance: info[0].toString(),
+        xrplBalance: formatUnits(info[1], 18),
+        buyPrice: formatUnits(info[2], 18),
+        sellPrice: formatUnits(info[3], 18),
+        buyPriceRaw: info[2],
+        sellPriceRaw: info[3]
+      });
     } catch (err) {
       console.error(err);
-      handleShowPopup("Error!", "Failed to list token.");
+      handleShowPopup("Error!", "Failed to fetch marketplace info.");
     }
   };
 
-  const handleBuyCredit = async () => {
-    if (!marketplaceContract) return;
-    try {
-      const offerBN = parseUnits(buyOfferPrice, 18);
-      const tx = await marketplaceContract.buyCredit(buyTokenId, offerBN);
-      await tx.wait();
-      handleShowPopup(
-        "Purchase Complete",
-        `You bought token #${buyTokenId} for ${buyOfferPrice} XRPL tokens.`
-      );
-    } catch (err) {
-      console.error(err);
-      handleShowPopup("Error!", "Failed to buy token.");
-    }
-  };
-
-  const fetchAllListings = async () => {
-    if (!marketplaceContract) return;
-    try {
-      const items = await marketplaceContract.getAllListingsSortedByPrice();
-      setListings(items);
-      handleShowPopup("Listings Refreshed", "Active listings updated!");
-    } catch (err) {
-      console.error(err);
-      handleShowPopup("Error!", "Failed to fetch listings.");
-    }
-  };
-
-  const handleCheckUserBalance = async () => {
-    if (!provider || !signer) return;
-    try {
-      const userAddr = await signer.getAddress();
-      const bal = await provider.getBalance(userAddr);
-      setCurrentUserBalance(formatEther(bal));
-      handleShowPopup("Balance Retrieved", `You have ${formatEther(bal)} ETH.`);
-    } catch (err) {
-      console.error(err);
-      handleShowPopup("Error!", "Failed to retrieve user balance.");
-    }
-  };
-
-  const handleGetTokensOfAddress = async () => {
-    if (!carbonCreditContract || !ownerAddressQuery) {
-      handleShowPopup("Warning", "Please enter a valid address to query.");
+  const handleBuyCredits = async () => {
+    if (!marketplaceContract || !xrplTokenContract) return;
+    const parsed = parseInt(buyAmount, 10);
+    if (!parsed || parsed <= 0 || isNaN(parsed)) {
+      handleShowPopup("Warning", "Please enter a valid whole number of credits to buy.");
       return;
     }
     try {
-      const tokenIds = await carbonCreditContract.getTokenIdsOfOwner(
-        ownerAddressQuery
-      );
-      setOwnerTokens(tokenIds.map((id) => id.toString()));
+      const amount = BigInt(parsed);
+      const info = await marketplaceContract.getMarketplaceInfo();
+      const totalCost = amount * info[2];
+      const approveTx = await xrplTokenContract.approve(MARKETPLACE_ADDRESS, totalCost);
+      await approveTx.wait();
+      const tx = await marketplaceContract.buyCredits(amount);
+      await tx.wait();
       handleShowPopup(
-        "Query Complete",
-        `Found ${tokenIds.length} token(s) for ${ownerAddressQuery}.`
+        "Purchase Complete",
+        `You bought ${parsed} credit(s) for ${formatUnits(totalCost, 18)} XRPL tokens.`
       );
+      fetchMarketplaceInfo();
     } catch (err) {
       console.error(err);
-      handleShowPopup("Error!", "Could not retrieve tokens.");
+      handleShowPopup("Error!", err.reason || "Failed to buy credits.");
     }
   };
 
-  const handleGetMarketplaceTokens = async () => {
-    if (!carbonCreditContract) return;
+  const handleSellCredits = async () => {
+    if (!marketplaceContract || !carbonCreditContract) return;
+    const parsed = parseInt(sellAmount, 10);
+    if (!parsed || parsed <= 0 || isNaN(parsed)) {
+      handleShowPopup("Warning", "Please enter a valid whole number of credits to sell.");
+      return;
+    }
     try {
-      const tokenIds = await carbonCreditContract.getTokenIdsOfOwner(
-        MARKETPLACE_ADDRESS
-      );
-      setOwnerTokens(tokenIds.map((id) => id.toString()));
+      const amount = BigInt(parsed);
+      const info = await marketplaceContract.getMarketplaceInfo();
+      const totalPayout = amount * info[3];
+      const approveTx = await carbonCreditContract.approve(MARKETPLACE_ADDRESS, amount);
+      await approveTx.wait();
+      const tx = await marketplaceContract.sellCredits(amount);
+      await tx.wait();
       handleShowPopup(
-        "Marketplace Tokens",
-        `Marketplace holds ${tokenIds.length} token(s).`
+        "Sale Complete",
+        `You sold ${parsed} credit(s) for ${formatUnits(totalPayout, 18)} XRPL tokens.`
+      );
+      fetchMarketplaceInfo();
+    } catch (err) {
+      console.error(err);
+      handleShowPopup("Error!", err.reason || "Failed to sell credits.");
+    }
+  };
+
+  const handleCheckCreditBalance = async () => {
+    if (!carbonCreditContract || !signer) return;
+    try {
+      const addr = await signer.getAddress();
+      const bal = await carbonCreditContract.balanceOf(addr);
+      setCreditBalance(bal.toString());
+      handleShowPopup("Balance Retrieved", `You hold ${bal.toString()} carbon credit(s).`);
+    } catch (err) {
+      console.error(err);
+      handleShowPopup("Error!", "Failed to retrieve credit balance.");
+    }
+  };
+
+  const handleCheckXrplBalance = async () => {
+    if (!xrplTokenContract || !signer) return;
+    try {
+      const addr = await signer.getAddress();
+      const bal = await xrplTokenContract.balanceOf(addr);
+      setXrplBalance(formatUnits(bal, 18));
+      handleShowPopup("Balance Retrieved", `You have ${formatUnits(bal, 18)} XRPL tokens.`);
+    } catch (err) {
+      console.error(err);
+      handleShowPopup("Error!", "Failed to retrieve XRPL balance.");
+    }
+  };
+
+  const handleCheckAddressBalance = async () => {
+    if (!carbonCreditContract || !ownerAddressQuery) {
+      handleShowPopup("Warning", "Please enter a valid address.");
+      return;
+    }
+    try {
+      const bal = await carbonCreditContract.balanceOf(ownerAddressQuery);
+      setQueriedBalance(bal.toString());
+      handleShowPopup(
+        "Query Complete",
+        `Address holds ${bal.toString()} carbon credit(s).`
       );
     } catch (err) {
       console.error(err);
-      handleShowPopup("Error!", "Could not retrieve marketplace tokens.");
+      handleShowPopup("Error!", "Could not retrieve balance.");
     }
   };
 
   const handleMintBatch = async () => {
     if (!carbonCreditContract || !signer) return;
+    const parsed = parseInt(batchMintNumber, 10);
+    if (!parsed || parsed <= 0 || isNaN(parsed)) {
+      handleShowPopup("Warning", "Please enter a valid whole number of credits to mint.");
+      return;
+    }
     try {
       const toAddress =
         mintToAddress.trim() !== "" ? mintToAddress : await signer.getAddress();
-      const uri = batchMintUri.trim() !== "" ? batchMintUri : defaultBaseUri;
-      const tx = await carbonCreditContract.mintCarbonCreditsBatch(
-        toAddress,
-        batchMintNumber,
-        uri
-      );
+      const tx = await carbonCreditContract.mintCredits(toAddress, parsed);
       await tx.wait();
       handleShowPopup(
         "Minting Success",
-        `Minted ${batchMintNumber} credits to ${toAddress}. (URI: ${uri})`
+        `Minted ${parsed} credits to ${toAddress}.`
       );
     } catch (err) {
       console.error(err);
-      handleShowPopup("Error!", "Failed to mint batch.");
+      handleShowPopup("Error!", err.reason || "Failed to mint credits.");
     }
   };
 
   const handleRedeem = async () => {
     if (!carbonCreditContract) return;
-    try {
-      const tx = await carbonCreditContract.redeemCarbonCredit(
-        redeemTokenId,
-        redeemEmissionId
-      );
-      await tx.wait();
-      handleShowPopup(
-        "Redeemed",
-        `Token #${redeemTokenId} was redeemed for emission: ${redeemEmissionId}`
-      );
-    } catch (err) {
-      console.error(err);
-      handleShowPopup("Error!", "Failed to redeem token.");
+    const parsed = parseInt(redeemAmount, 10);
+    if (!parsed || parsed <= 0 || isNaN(parsed)) {
+      handleShowPopup("Warning", "Please enter a valid whole number of credits to redeem.");
+      return;
     }
-  };
-
-  const handleCheckTokenOwner = async () => {
-    if (!carbonCreditContract || !queriedTokenId) {
-      handleShowPopup("Warning", "Please enter a token ID.");
+    if (!redeemEmissionId || redeemEmissionId.trim() === "") {
+      handleShowPopup("Warning", "Please enter an emission ID.");
       return;
     }
     try {
-      const ownerOfToken = await carbonCreditContract.ownerOf(queriedTokenId);
-      setQueriedTokenOwner(ownerOfToken);
+      const tx = await carbonCreditContract.redeemCredits(parsed, redeemEmissionId.trim());
+      await tx.wait();
       handleShowPopup(
-        "Owner Retrieved",
-        `Token #${queriedTokenId} is owned by ${ownerOfToken}.`
+        "Redeemed",
+        `${parsed} credit(s) redeemed for emission: ${redeemEmissionId.trim()}`
       );
     } catch (err) {
       console.error(err);
-      handleShowPopup("Error!", "Failed to retrieve owner.");
+      handleShowPopup("Error!", err.reason || "Failed to redeem credits.");
     }
   };
 
-  const handleMarketplaceBalance = async () => {
+  const handleSetBuyPrice = async () => {
     if (!marketplaceContract) return;
+    const val = parseFloat(setBuyPriceInput);
+    if (!val || val <= 0 || isNaN(val)) {
+      handleShowPopup("Warning", "Please enter a valid positive price.");
+      return;
+    }
     try {
-      const balanceBN = await marketplaceContract.marketplaceBalance();
-      setMarketplaceCreditCount(balanceBN.toString());
-      handleShowPopup(
-        "Marketplace Balance",
-        `Marketplace holds ${balanceBN.toString()} credits.`
-      );
+      const priceBN = parseUnits(setBuyPriceInput, 18);
+      const tx = await marketplaceContract.setBuyPrice(priceBN);
+      await tx.wait();
+      handleShowPopup("Price Updated", `Buy price set to ${setBuyPriceInput} XRPL per credit.`);
+      fetchMarketplaceInfo();
     } catch (err) {
       console.error(err);
-      handleShowPopup("Error!", "Failed to retrieve marketplace balance.");
+      handleShowPopup("Error!", err.reason || "Failed to set buy price.");
+    }
+  };
+
+  const handleSetSellPrice = async () => {
+    if (!marketplaceContract) return;
+    const val = parseFloat(setSellPriceInput);
+    if (!val || val <= 0 || isNaN(val)) {
+      handleShowPopup("Warning", "Please enter a valid positive price.");
+      return;
+    }
+    try {
+      const priceBN = parseUnits(setSellPriceInput, 18);
+      const tx = await marketplaceContract.setSellPrice(priceBN);
+      await tx.wait();
+      handleShowPopup("Price Updated", `Sell price set to ${setSellPriceInput} XRPL per credit.`);
+      fetchMarketplaceInfo();
+    } catch (err) {
+      console.error(err);
+      handleShowPopup("Error!", err.reason || "Failed to set sell price.");
     }
   };
 
@@ -332,38 +423,41 @@ function App() {
         return (
           <HomeTab
             setActiveTab={setActiveTab}
+            connectWallet={connectWallet}
             nodeRef={nodeRefs["home"]}
           />
         );
       case "marketplace":
         return (
           <MarketplaceTab
-            listings={listings}
-            listTokenId={listTokenId}
-            setListTokenId={setListTokenId}
-            listPrice={listPrice}
-            setListPrice={setListPrice}
-            buyTokenId={buyTokenId}
-            setBuyTokenId={setBuyTokenId}
-            buyOfferPrice={buyOfferPrice}
-            setBuyOfferPrice={setBuyOfferPrice}
-            fetchAllListings={fetchAllListings}
-            handleListForSale={handleListForSale}
-            handleBuyCredit={handleBuyCredit}
+            buyAmount={buyAmount}
+            setBuyAmount={setBuyAmount}
+            sellAmount={sellAmount}
+            setSellAmount={setSellAmount}
+            handleBuyCredits={handleBuyCredits}
+            handleSellCredits={handleSellCredits}
+            marketplaceInfo={marketplaceInfo}
+            fetchMarketplaceInfo={fetchMarketplaceInfo}
             nodeRef={nodeRefs["marketplace"]}
           />
         );
       case "user":
         return (
           <UserTab
-            currentUserBalance={currentUserBalance}
-            handleCheckUserBalance={handleCheckUserBalance}
+            creditBalance={creditBalance}
+            xrplBalance={xrplBalance}
+            handleCheckCreditBalance={handleCheckCreditBalance}
+            handleCheckXrplBalance={handleCheckXrplBalance}
             ownerAddressQuery={ownerAddressQuery}
             setOwnerAddressQuery={setOwnerAddressQuery}
-            handleGetTokensOfAddress={handleGetTokensOfAddress}
-            handleGetMarketplaceTokens={handleGetMarketplaceTokens}
-            ownerTokens={ownerTokens}
+            handleCheckAddressBalance={handleCheckAddressBalance}
+            queriedBalance={queriedBalance}
             currentUserAddress={currentUserAddress}
+            redeemAmount={redeemAmount}
+            setRedeemAmount={setRedeemAmount}
+            redeemEmissionId={redeemEmissionId}
+            setRedeemEmissionId={setRedeemEmissionId}
+            handleRedeem={handleRedeem}
             nodeRef={nodeRefs["user"]}
           />
         );
@@ -373,26 +467,23 @@ function App() {
             isUserOwner={isUserOwner}
             batchMintNumber={batchMintNumber}
             setBatchMintNumber={setBatchMintNumber}
-            batchMintUri={batchMintUri}
-            setBatchMintUri={setBatchMintUri}
             mintToAddress={mintToAddress}
             setMintToAddress={setMintToAddress}
             handleMintBatch={handleMintBatch}
-            redeemTokenId={redeemTokenId}
-            setRedeemTokenId={setRedeemTokenId}
-            redeemEmissionId={redeemEmissionId}
-            setRedeemEmissionId={setRedeemEmissionId}
-            handleRedeem={handleRedeem}
-            queriedTokenId={queriedTokenId}
-            setQueriedTokenId={setQueriedTokenId}
-            handleCheckTokenOwner={handleCheckTokenOwner}
-            queriedTokenOwner={queriedTokenOwner}
-            handleMarketplaceBalance={handleMarketplaceBalance}
-            marketplaceCreditCount={marketplaceCreditCount}
+            setBuyPriceInput={setBuyPriceInput}
+            setSetBuyPriceInput={setSetBuyPriceInput}
+            setSellPriceInput={setSellPriceInput}
+            setSetSellPriceInput={setSetSellPriceInput}
+            handleSetBuyPrice={handleSetBuyPrice}
+            handleSetSellPrice={handleSetSellPrice}
+            marketplaceInfo={marketplaceInfo}
+            fetchMarketplaceInfo={fetchMarketplaceInfo}
             contractOwnerAddress={contractOwnerAddress}
             carbonCreditContract={carbonCreditContract}
             currentUserAddress={currentUserAddress}
             handleShowPopup={handleShowPopup}
+            connectWallet={connectWallet}
+            walletError={walletError}
             nodeRef={nodeRefs["admin"]}
           />
         );
@@ -537,7 +628,7 @@ function App() {
   );
 }
 
-function HomeTab({ setActiveTab, nodeRef }) {
+function HomeTab({ setActiveTab, connectWallet, nodeRef }) {
   return (
     <div ref={nodeRef}>
       <div
@@ -615,7 +706,7 @@ function HomeTab({ setActiveTab, nodeRef }) {
               </p>
               <button
                 className="btn btn-primary animated-btn"
-                onClick={() => alert("Wallet connect logic here!")}
+                onClick={connectWallet}
               >
                 Connect Wallet
               </button>
@@ -669,7 +760,7 @@ function HomeTab({ setActiveTab, nodeRef }) {
               </p>
               <button
                 className="btn btn-warning animated-btn"
-                onClick={() => setActiveTab("admin")}
+                onClick={() => setActiveTab("user")}
               >
                 Redeem Credits
               </button>
@@ -682,18 +773,14 @@ function HomeTab({ setActiveTab, nodeRef }) {
 }
 
 function MarketplaceTab({
-  listings,
-  listTokenId,
-  setListTokenId,
-  listPrice,
-  setListPrice,
-  buyTokenId,
-  setBuyTokenId,
-  buyOfferPrice,
-  setBuyOfferPrice,
-  fetchAllListings,
-  handleListForSale,
-  handleBuyCredit,
+  buyAmount,
+  setBuyAmount,
+  sellAmount,
+  setSellAmount,
+  handleBuyCredits,
+  handleSellCredits,
+  marketplaceInfo,
+  fetchMarketplaceInfo,
   nodeRef
 }) {
   const fancyCardStyle = {
@@ -722,106 +809,125 @@ function MarketplaceTab({
     fontWeight: "900",
     margin: 0
   };
+
+  const parsedBuy = parseInt(buyAmount, 10);
+  const buyTotal =
+    parsedBuy > 0 && marketplaceInfo && marketplaceInfo.buyPriceRaw
+
+      ? (BigInt(parsedBuy) * BigInt(marketplaceInfo.buyPriceRaw)).toString()
+      : null;
+
+  const parsedSell = parseInt(sellAmount, 10);
+  const sellTotal =
+    parsedSell > 0 && marketplaceInfo && marketplaceInfo.sellPriceRaw
+
+      ? (BigInt(parsedSell) * BigInt(marketplaceInfo.sellPriceRaw)).toString()
+      : null;
+
   return (
     <div ref={nodeRef}>
       <div style={fancyCardStyle}>
         <div style={fancyCardHeader}>
-          <h3 style={bigHeadingStyle}>Active Listings</h3>
+          <h3 style={bigHeadingStyle}>Market Info</h3>
           <button
             className="btn btn-outline-light btn-sm animated-btn"
-            onClick={fetchAllListings}
+            onClick={fetchMarketplaceInfo}
           >
             Refresh
           </button>
         </div>
         <div style={fancyCardBody}>
-          {listings.length === 0 ? (
-            <p>No active listings found.</p>
+          {!marketplaceInfo ? (
+            <p>Click Refresh to load marketplace data.</p>
           ) : (
-            <table className="table table-bordered">
-              <thead>
-                <tr>
-                  <th>Token ID</th>
-                  <th>Price (XRPL)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {listings.map((item, idx) => (
-                  <tr key={idx}>
-                    <td>{item.tokenId.toString()}</td>
-                    <td>{formatUnits(item.price, 18)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="row">
+              <div className="col-md-3 text-center mb-2">
+                <strong>Buy Price</strong>
+                <div style={{ fontSize: "1.5rem", color: "#198754" }}>
+                  {marketplaceInfo.buyPrice} XRPL
+                </div>
+              </div>
+              <div className="col-md-3 text-center mb-2">
+                <strong>Sell Price</strong>
+                <div style={{ fontSize: "1.5rem", color: "#dc3545" }}>
+                  {marketplaceInfo.sellPrice} XRPL
+                </div>
+              </div>
+              <div className="col-md-3 text-center mb-2">
+                <strong>Credits in Pool</strong>
+                <div style={{ fontSize: "1.5rem" }}>
+                  {marketplaceInfo.creditBalance}
+                </div>
+              </div>
+              <div className="col-md-3 text-center mb-2">
+                <strong>XRPL in Pool</strong>
+                <div style={{ fontSize: "1.5rem" }}>
+                  {marketplaceInfo.xrplBalance}
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>
       <div style={fancyCardStyle}>
         <div style={fancyCardHeader}>
-          <h3 style={bigHeadingStyle}>List a Credit For Sale</h3>
+          <h3 style={bigHeadingStyle}>Buy Credits</h3>
         </div>
         <div style={fancyCardBody}>
           <p className="text-muted">
-            Marketplace must own the NFT to list it. Transfer it there first!
+            Purchase carbon credits from the marketplace pool.
           </p>
           <div className="mb-3">
-            <label>Token ID to List:</label>
+            <label>Number of Credits to Buy:</label>
             <input
               type="number"
               className="form-control"
-              value={listTokenId}
-              onChange={(e) => setListTokenId(e.target.value)}
+              min="1"
+              value={buyAmount}
+              onChange={(e) => setBuyAmount(e.target.value)}
             />
           </div>
-          <div className="mb-3">
-            <label>Sale Price (XRPL):</label>
-            <input
-              type="text"
-              className="form-control"
-              value={listPrice}
-              onChange={(e) => setListPrice(e.target.value)}
-            />
-          </div>
+          {buyTotal && (
+            <p>
+              <strong>Total Cost:</strong> {formatUnits(buyTotal, 18)} XRPL tokens
+            </p>
+          )}
           <button
-            className="btn btn-primary animated-btn"
-            onClick={handleListForSale}
+            className="btn btn-success animated-btn"
+            onClick={handleBuyCredits}
           >
-            List For Sale
+            Approve &amp; Buy
           </button>
         </div>
       </div>
       <div style={fancyCardStyle}>
         <div style={fancyCardHeader}>
-          <h3 style={bigHeadingStyle}>Buy a Credit</h3>
+          <h3 style={bigHeadingStyle}>Sell Credits</h3>
         </div>
         <div style={fancyCardBody}>
           <p className="text-muted">
-            Provide the ID of a listed token & your offer price.
+            Sell your carbon credits back to the marketplace pool.
           </p>
           <div className="mb-3">
-            <label>Token ID to Purchase:</label>
+            <label>Number of Credits to Sell:</label>
             <input
               type="number"
               className="form-control"
-              value={buyTokenId}
-              onChange={(e) => setBuyTokenId(e.target.value)}
+              min="1"
+              value={sellAmount}
+              onChange={(e) => setSellAmount(e.target.value)}
             />
           </div>
-          <div className="mb-3">
-            <label>Your Offer (XRPL):</label>
-            <input
-              type="text"
-              className="form-control"
-              value={buyOfferPrice}
-              onChange={(e) => setBuyOfferPrice(e.target.value)}
-            />
-          </div>
+          {sellTotal && (
+            <p>
+              <strong>Total Payout:</strong> {formatUnits(sellTotal, 18)} XRPL tokens
+            </p>
+          )}
           <button
-            className="btn btn-success animated-btn"
-            onClick={handleBuyCredit}
+            className="btn btn-primary animated-btn"
+            onClick={handleSellCredits}
           >
-            Buy Now
+            Approve &amp; Sell
           </button>
         </div>
       </div>
@@ -831,14 +937,20 @@ function MarketplaceTab({
 }
 
 function UserTab({
-  currentUserBalance,
-  handleCheckUserBalance,
+  creditBalance,
+  xrplBalance,
+  handleCheckCreditBalance,
+  handleCheckXrplBalance,
   ownerAddressQuery,
   setOwnerAddressQuery,
-  handleGetTokensOfAddress,
-  handleGetMarketplaceTokens,
-  ownerTokens,
+  handleCheckAddressBalance,
+  queriedBalance,
   currentUserAddress,
+  redeemAmount,
+  setRedeemAmount,
+  redeemEmissionId,
+  setRedeemEmissionId,
+  handleRedeem,
   nodeRef
 }) {
   const fancyCardStyle = {
@@ -871,26 +983,42 @@ function UserTab({
     <div ref={nodeRef}>
       <div style={fancyCardStyle}>
         <div style={fancyCardHeader}>
-          <h3 style={bigHeadingStyle}>Check My XRPL Balance</h3>
+          <h3 style={bigHeadingStyle}>My Balances</h3>
         </div>
         <div style={fancyCardBody}>
-          <button
-            className="btn btn-info mb-2 animated-btn"
-            onClick={handleCheckUserBalance}
-          >
-            Check Balance
-          </button>
-          <div>
-            <label style={{ fontWeight: "bold" }}>Balance (XRPL):</label>
-            <span className="ms-2">
-              {currentUserBalance || "Not fetched yet"}
-            </span>
+          <div className="d-flex gap-2 mb-3">
+            <button
+              className="btn btn-info animated-btn"
+              onClick={handleCheckCreditBalance}
+            >
+              Check Credit Balance
+            </button>
+            <button
+              className="btn btn-secondary animated-btn"
+              onClick={handleCheckXrplBalance}
+            >
+              Check XRPL Balance
+            </button>
+          </div>
+          <div className="row">
+            <div className="col-md-6">
+              <label style={{ fontWeight: "bold" }}>Carbon Credits:</label>
+              <span className="ms-2">
+                {creditBalance !== "" ? creditBalance : "Not fetched yet"}
+              </span>
+            </div>
+            <div className="col-md-6">
+              <label style={{ fontWeight: "bold" }}>XRPL Tokens:</label>
+              <span className="ms-2">
+                {xrplBalance !== "" ? xrplBalance : "Not fetched yet"}
+              </span>
+            </div>
           </div>
         </div>
       </div>
       <div style={fancyCardStyle}>
         <div style={fancyCardHeader}>
-          <h3 style={bigHeadingStyle}>Check Tokens of an Address</h3>
+          <h3 style={bigHeadingStyle}>Check Balance of Address</h3>
         </div>
         <div style={fancyCardBody}>
           <div className="mb-3">
@@ -903,30 +1031,51 @@ function UserTab({
               onChange={(e) => setOwnerAddressQuery(e.target.value)}
             />
           </div>
-          <div className="d-flex gap-2 mb-3">
-            <button
-              className="btn btn-info animated-btn"
-              onClick={handleGetTokensOfAddress}
-            >
-              Show Tokens
-            </button>
-            <button
-              className="btn btn-secondary animated-btn"
-              onClick={handleGetMarketplaceTokens}
-            >
-              Marketplace Tokens
-            </button>
+          <button
+            className="btn btn-info mb-2 animated-btn"
+            onClick={handleCheckAddressBalance}
+          >
+            Check Balance
+          </button>
+          <div>
+            <label style={{ fontWeight: "bold" }}>Credits Held:</label>
+            <span className="ms-2">
+              {queriedBalance !== "" ? queriedBalance : "Not fetched yet"}
+            </span>
           </div>
-          <h5 style={{ color: "#0d6efd" }}>Token IDs Found:</h5>
-          {ownerTokens.length === 0 ? (
-            <p>No tokens found.</p>
-          ) : (
-            <ul>
-              {ownerTokens.map((tid, idx) => (
-                <li key={idx}>{tid}</li>
-              ))}
-            </ul>
-          )}
+        </div>
+      </div>
+      <div style={fancyCardStyle}>
+        <div style={fancyCardHeader}>
+          <h3 style={bigHeadingStyle}>Retire Credits</h3>
+        </div>
+        <div style={fancyCardBody}>
+          <p className="text-muted">
+            Burn your carbon credits to permanently offset an emission and confirm your Net Zero status.
+          </p>
+          <div className="mb-3">
+            <label>Number of Credits to Retire:</label>
+            <input
+              type="number"
+              className="form-control"
+              min="1"
+              value={redeemAmount}
+              onChange={(e) => setRedeemAmount(e.target.value)}
+            />
+          </div>
+          <div className="mb-3">
+            <label>Emission ID:</label>
+            <input
+              type="text"
+              className="form-control"
+              placeholder="e.g. EM-2025-001"
+              value={redeemEmissionId}
+              onChange={(e) => setRedeemEmissionId(e.target.value)}
+            />
+          </div>
+          <button className="btn btn-danger animated-btn" onClick={handleRedeem}>
+            Retire Credits
+          </button>
         </div>
       </div>
       <div style={fancyCardStyle}>
@@ -950,27 +1099,24 @@ function AdminTab({
   isUserOwner,
   batchMintNumber,
   setBatchMintNumber,
-  batchMintUri,
-  setBatchMintUri,
   mintToAddress,
   setMintToAddress,
   handleMintBatch,
-  redeemTokenId,
-  setRedeemTokenId,
-  redeemEmissionId,
-  setRedeemEmissionId,
-  handleRedeem,
-  queriedTokenId,
-  setQueriedTokenId,
-  handleCheckTokenOwner,
-  queriedTokenOwner,
-  handleMarketplaceBalance,
-  marketplaceCreditCount,
+  setBuyPriceInput,
+  setSetBuyPriceInput,
+  setSellPriceInput,
+  setSetSellPriceInput,
+  handleSetBuyPrice,
+  handleSetSellPrice,
+  marketplaceInfo,
+  fetchMarketplaceInfo,
   contractOwnerAddress,
   nodeRef,
   carbonCreditContract,
   currentUserAddress,
-  handleShowPopup
+  handleShowPopup,
+  connectWallet,
+  walletError
 }) {
   const fancyCardStyle = {
     border: "2px solid #0dcaf0",
@@ -999,8 +1145,6 @@ function AdminTab({
     margin: 0
   };
   const [emissionRecords, setEmissionRecords] = useState([]);
-  const [selectedTokenByEmission, setSelectedTokenByEmission] = useState({});
-  const [userTokenIds, setUserTokenIds] = useState([]);
 
   const handleFileChange = (e) => {
     if (e.target.files[0]) {
@@ -1018,57 +1162,59 @@ function AdminTab({
     }
   };
 
-  const handleSelectToken = (emissionId, tokenId) => {
-    setSelectedTokenByEmission((prev) => ({
-      ...prev,
-      [emissionId]: tokenId
-    }));
-  };
-
-  const handleRedeemForEmission = async (emissionId) => {
+  const handleRedeemForEmission = async (emissionId, quantity) => {
     try {
-      const chosenToken = selectedTokenByEmission[emissionId];
-      if (!chosenToken) {
-        handleShowPopup("Error!", "Please select a carbon credit token.");
+      const amount = parseInt(quantity, 10);
+      if (!amount || amount <= 0 || isNaN(amount)) {
+        handleShowPopup("Error!", `Invalid quantity "${quantity}" for emission ${emissionId}.`);
         return;
       }
-      const tx = await carbonCreditContract.redeemCarbonCredit(chosenToken, emissionId);
+      if (!emissionId || String(emissionId).trim() === "") {
+        handleShowPopup("Error!", "Missing emission ID in CSV row.");
+        return;
+      }
+      const tx = await carbonCreditContract.redeemCredits(amount, String(emissionId).trim());
       await tx.wait();
       handleShowPopup(
         "Redeemed",
-        `Token #${chosenToken} was redeemed for emission: ${emissionId}`
+        `${amount} credit(s) redeemed for emission: ${emissionId}`
       );
     } catch (err) {
       console.error(err);
       handleShowPopup(
         "Error!",
-        `Failed to redeem for emission ${emissionId}.`
+        err.reason || `Failed to redeem for emission ${emissionId}.`
       );
     }
   };
 
   const handleRedeemAll = async () => {
     for (const record of emissionRecords) {
-      const emissionId = record.emissionId;
-      await handleRedeemForEmission(emissionId);
-    }
-  };
-
-  const fetchUserTokens = async (address) => {
-    if (!carbonCreditContract || !address) return;
-    try {
-      const tokenIds = await carbonCreditContract.getTokenIdsOfOwner(address);
-      setUserTokenIds(tokenIds.map((id) => id.toString()));
-    } catch (err) {
-      console.error("Error fetching user tokens:", err);
-      handleShowPopup("Error!", "Could not fetch user's token IDs.");
+      await handleRedeemForEmission(record.emissionId, record.quantity);
     }
   };
 
   if (!isUserOwner) {
     return (
       <div ref={nodeRef} className="alert alert-danger">
-        You do not have permission to view this section.
+        <p><strong>You do not have permission to view this section.</strong></p>
+        <small>
+          Your address: {currentUserAddress || "(not connected)"}<br />
+          Contract owner: {contractOwnerAddress || "(loading...)"}<br />
+          Chain ID in MetaMask must be 31337 (Hardhat Local)
+        </small>
+        {walletError && (
+          <div className="alert alert-warning mt-2 mb-0">
+            <strong>Error:</strong> {walletError}
+          </div>
+        )}
+        <br />
+        <button
+          className="btn btn-sm btn-outline-danger mt-2"
+          onClick={connectWallet}
+        >
+          Retry Connection
+        </button>
       </div>
     );
   }
@@ -1077,11 +1223,11 @@ function AdminTab({
     <div ref={nodeRef}>
       <div style={fancyCardStyle}>
         <div style={fancyCardHeader}>
-          <h3 style={bigHeadingStyle}>Mint Carbon Credits (Batch)</h3>
+          <h3 style={bigHeadingStyle}>Mint Carbon Credits</h3>
         </div>
         <div style={fancyCardBody}>
           <p className="text-muted">
-            Enter how many credits to create, plus an optional address/URI.
+            Enter how many credits to create, plus an optional recipient address.
           </p>
           <div className="mb-3">
             <label>Number of Credits:</label>
@@ -1102,96 +1248,69 @@ function AdminTab({
               onChange={(e) => setMintToAddress(e.target.value)}
             />
           </div>
-          <div className="mb-3">
-            <label>Base URI (optional):</label>
-            <input
-              type="text"
-              className="form-control"
-              value={batchMintUri}
-              onChange={(e) => setBatchMintUri(e.target.value)}
-            />
-          </div>
           <button className="btn btn-primary animated-btn" onClick={handleMintBatch}>
-            Mint Batch
+            Mint Credits
           </button>
         </div>
       </div>
       <div style={fancyCardStyle}>
         <div style={fancyCardHeader}>
-          <h3 style={bigHeadingStyle}>Redeem a Carbon Credit</h3>
+          <h3 style={bigHeadingStyle}>Set Marketplace Prices</h3>
         </div>
         <div style={fancyCardBody}>
-          <p className="text-muted">Provide the token ID & emission ID.</p>
           <div className="mb-3">
-            <label>Token ID:</label>
-            <input
-              type="number"
-              className="form-control"
-              value={redeemTokenId}
-              onChange={(e) => setRedeemTokenId(e.target.value)}
-            />
-          </div>
-          <div className="mb-3">
-            <label>Emission ID:</label>
+            <label>Buy Price (XRPL per credit):</label>
             <input
               type="text"
               className="form-control"
-              value={redeemEmissionId}
-              onChange={(e) => setRedeemEmissionId(e.target.value)}
+              value={setBuyPriceInput}
+              onChange={(e) => setSetBuyPriceInput(e.target.value)}
             />
           </div>
-          <button className="btn btn-primary animated-btn" onClick={handleRedeem}>
-            Redeem
+          <button
+            className="btn btn-primary me-2 animated-btn"
+            onClick={handleSetBuyPrice}
+          >
+            Set Buy Price
           </button>
-        </div>
-      </div>
-      <div style={fancyCardStyle}>
-        <div style={fancyCardHeader}>
-          <h3 style={bigHeadingStyle}>Check Owner of a Token</h3>
-        </div>
-        <div style={fancyCardBody}>
-          <p className="text-muted">Enter a token ID below.</p>
-          <div className="mb-3">
-            <label>Token ID:</label>
+          <div className="mb-3 mt-3">
+            <label>Sell Price (XRPL per credit):</label>
             <input
-              type="number"
+              type="text"
               className="form-control"
-              value={queriedTokenId}
-              onChange={(e) => setQueriedTokenId(e.target.value)}
+              value={setSellPriceInput}
+              onChange={(e) => setSetSellPriceInput(e.target.value)}
             />
           </div>
           <button
-            className="btn btn-info mb-2 animated-btn"
-            onClick={handleCheckTokenOwner}
+            className="btn btn-primary animated-btn"
+            onClick={handleSetSellPrice}
           >
-            Check Owner
+            Set Sell Price
           </button>
-          <div>
-            <label style={{ fontWeight: "bold" }}>
-              Owner of Token #{queriedTokenId}:
-            </label>
-            <div>{queriedTokenOwner || "Not fetched yet"}</div>
-          </div>
         </div>
       </div>
       <div style={fancyCardStyle}>
         <div style={fancyCardHeader}>
-          <h3 style={bigHeadingStyle}>Get Marketplace Balance</h3>
+          <h3 style={bigHeadingStyle}>Marketplace Info</h3>
+          <button
+            className="btn btn-outline-light btn-sm animated-btn"
+            onClick={fetchMarketplaceInfo}
+          >
+            Refresh
+          </button>
         </div>
         <div style={fancyCardBody}>
-          <p className="text-muted">See how many credits marketplace holds.</p>
-          <button
-            className="btn btn-info mb-2 animated-btn"
-            onClick={handleMarketplaceBalance}
-          >
-            Retrieve Balance
-          </button>
-          <div>
-            <label style={{ fontWeight: "bold" }}>Marketplace Balance:</label>
-            <span className="ms-2">
-              {marketplaceCreditCount || "Not fetched yet"}
-            </span>
-          </div>
+          {!marketplaceInfo ? (
+            <p>Click Refresh to load marketplace data.</p>
+          ) : (
+            <div>
+              <p><strong>Credits in Pool:</strong> {marketplaceInfo.creditBalance}</p>
+              <p><strong>XRPL in Pool:</strong> {marketplaceInfo.xrplBalance}</p>
+              <p><strong>Buy Price:</strong> {marketplaceInfo.buyPrice} XRPL</p>
+              <p><strong>Sell Price:</strong> {marketplaceInfo.sellPrice} XRPL</p>
+            </div>
+          )}
         </div>
       </div>
       <div style={fancyCardStyle}>
@@ -1217,21 +1336,12 @@ function AdminTab({
               onChange={handleFileChange}
             />
           </div>
-          <div className="mb-3">
-            <button
-              className="btn btn-secondary animated-btn"
-              onClick={() => fetchUserTokens(currentUserAddress)}
-            >
-              Load My Carbon Credits
-            </button>
-          </div>
           {emissionRecords.length > 0 && (
             <table className="table table-bordered">
               <thead>
                 <tr>
                   <th>Emission ID</th>
-                  <th>Quantity (Tons)</th>
-                  <th>Select Carbon Credit (Token ID)</th>
+                  <th>Quantity (Credits to Redeem)</th>
                   <th>Redeem Action</th>
                 </tr>
               </thead>
@@ -1244,25 +1354,9 @@ function AdminTab({
                       <td>{emissionId}</td>
                       <td>{quantity}</td>
                       <td>
-                        <select
-                          className="form-select"
-                          value={selectedTokenByEmission[emissionId] || ""}
-                          onChange={(e) =>
-                            handleSelectToken(emissionId, e.target.value)
-                          }
-                        >
-                          <option value="">-- Select Token --</option>
-                          {userTokenIds.map((tid) => (
-                            <option key={tid} value={tid}>
-                              {tid}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td>
                         <button
                           className="btn btn-primary animated-btn"
-                          onClick={() => handleRedeemForEmission(emissionId)}
+                          onClick={() => handleRedeemForEmission(emissionId, quantity)}
                         >
                           Redeem
                         </button>

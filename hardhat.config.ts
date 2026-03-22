@@ -6,6 +6,11 @@ const config: HardhatUserConfig = {
   networks: {
     localhost: {
       url: "http://127.0.0.1:8545",
+    },
+    xrplEvmSidechain: {
+      url: "https://rpc-evm-sidechain.xrpl.org",
+      chainId: 1440002,
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
     }
   }
 };

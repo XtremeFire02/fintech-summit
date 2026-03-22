@@ -1,31 +1,31 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "./CarbonCredit.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 
-contract CarbonCreditMarketplace is IERC721Receiver {
-    CarbonCredit public carbonCreditContract;
+contract CarbonCreditMarketplace {
+    IERC20 public carbonCreditToken;
     IERC20 public xrplToken;
     address public owner;
 
-    mapping(uint256 => uint256) public creditsForSale;
-    uint256[] private _listedTokens;
-    mapping(uint256 => bool) private _isListed;
+    uint256 public buyPrice;
+    uint256 public sellPrice;
 
-    struct MarketItem {
-        uint256 tokenId;
-        uint256 price;
-    }
+    event CreditsPurchased(address indexed buyer, uint256 amount, uint256 totalCost);
+    event CreditsSold(address indexed seller, uint256 amount, uint256 totalPayout);
+    event PriceUpdated(uint256 newBuyPrice, uint256 newSellPrice);
 
-    event CreditListed(uint256 indexed tokenId, uint256 price);
-    event CreditSold(uint256 indexed tokenId, address buyer, uint256 price);
-
-    constructor(address carbonCreditAddress, address xrplTokenAddress) {
-        carbonCreditContract = CarbonCredit(carbonCreditAddress);
+    constructor(
+        address carbonCreditAddress,
+        address xrplTokenAddress,
+        uint256 initialBuyPrice,
+        uint256 initialSellPrice
+    ) {
+        carbonCreditToken = IERC20(carbonCreditAddress);
         xrplToken = IERC20(xrplTokenAddress);
         owner = msg.sender;
+        buyPrice = initialBuyPrice;
+        sellPrice = initialSellPrice;
     }
 
     modifier onlyOwner() {
@@ -33,92 +33,75 @@ contract CarbonCreditMarketplace is IERC721Receiver {
         _;
     }
 
-    function listCreditForSale(uint256 tokenId, uint256 price) external onlyOwner {
-        require(
-            carbonCreditContract.ownerOf(tokenId) == address(this),
-            "Marketplace does not own this credit"
-        );
-        creditsForSale[tokenId] = price;
-        if (!_isListed[tokenId]) {
-            _listedTokens.push(tokenId);
-            _isListed[tokenId] = true;
-        }
-        emit CreditListed(tokenId, price);
+    function setBuyPrice(uint256 newPrice) external onlyOwner {
+        require(newPrice > 0, "Price must be > 0");
+        buyPrice = newPrice;
+        emit PriceUpdated(buyPrice, sellPrice);
     }
 
-    function buyCredit(uint256 tokenId, uint256 offerPrice) external {
-        uint256 listingPrice = creditsForSale[tokenId];
-        require(listingPrice > 0, "Credit not for sale");
-        require(offerPrice >= listingPrice, "Offer price is too low");
-        bool success = xrplToken.transferFrom(msg.sender, address(this), offerPrice);
-        require(success, "XRPL token transfer failed");
-        carbonCreditContract.safeTransferFrom(address(this), msg.sender, tokenId);
-        creditsForSale[tokenId] = 0;
-        _removeTokenFromList(tokenId);
-        emit CreditSold(tokenId, msg.sender, offerPrice);
+    function setSellPrice(uint256 newPrice) external onlyOwner {
+        require(newPrice > 0, "Price must be > 0");
+        sellPrice = newPrice;
+        emit PriceUpdated(buyPrice, sellPrice);
     }
 
-    function withdrawFunds(uint256 amount) external onlyOwner {
+    function buyCredits(uint256 amount) external {
         require(amount > 0, "Amount must be > 0");
-        require(xrplToken.balanceOf(address(this)) >= amount, "Not enough XRPL tokens in contract");
+        uint256 totalCost = amount * buyPrice;
+        require(
+            carbonCreditToken.balanceOf(address(this)) >= amount,
+            "Not enough credits in marketplace"
+        );
+
+        bool xrplSuccess = xrplToken.transferFrom(msg.sender, address(this), totalCost);
+        require(xrplSuccess, "XRPL payment failed");
+
+        bool creditSuccess = carbonCreditToken.transfer(msg.sender, amount);
+        require(creditSuccess, "Credit transfer failed");
+
+        emit CreditsPurchased(msg.sender, amount, totalCost);
+    }
+
+    function sellCredits(uint256 amount) external {
+        require(amount > 0, "Amount must be > 0");
+        uint256 totalPayout = amount * sellPrice;
+        require(
+            xrplToken.balanceOf(address(this)) >= totalPayout,
+            "Not enough XRPL in marketplace"
+        );
+
+        bool creditSuccess = carbonCreditToken.transferFrom(msg.sender, address(this), amount);
+        require(creditSuccess, "Credit transfer failed");
+
+        bool xrplSuccess = xrplToken.transfer(msg.sender, totalPayout);
+        require(xrplSuccess, "XRPL payout failed");
+
+        emit CreditsSold(msg.sender, amount, totalPayout);
+    }
+
+    function withdrawXrpl(uint256 amount) external onlyOwner {
+        require(amount > 0, "Amount must be > 0");
+        require(xrplToken.balanceOf(address(this)) >= amount, "Insufficient XRPL balance");
         bool success = xrplToken.transfer(owner, amount);
-        require(success, "Withdraw transfer failed");
+        require(success, "Withdraw failed");
     }
 
-    function marketplaceBalance() external view returns (uint256) {
-        return carbonCreditContract.balanceOf(address(this));
+    function withdrawCredits(uint256 amount) external onlyOwner {
+        require(amount > 0, "Amount must be > 0");
+        require(carbonCreditToken.balanceOf(address(this)) >= amount, "Insufficient credit balance");
+        bool success = carbonCreditToken.transfer(owner, amount);
+        require(success, "Withdraw failed");
     }
 
-    function getAllListingsSortedByPrice() external view returns (MarketItem[] memory) {
-        uint256 activeCount;
-        for (uint256 i = 0; i < _listedTokens.length; i++) {
-            if (creditsForSale[_listedTokens[i]] > 0) {
-                activeCount++;
-            }
-        }
-        MarketItem[] memory items = new MarketItem[](activeCount);
-        uint256 index = 0;
-        for (uint256 i = 0; i < _listedTokens.length; i++) {
-            uint256 tid = _listedTokens[i];
-            uint256 p = creditsForSale[tid];
-            if (p > 0) {
-                items[index] = MarketItem({ tokenId: tid, price: p });
-                index++;
-            }
-        }
-        _sortMarketItemsByPrice(items);
-        return items;
-    }
-
-    function _removeTokenFromList(uint256 tokenId) internal {
-        _isListed[tokenId] = false;
-        for (uint256 i = 0; i < _listedTokens.length; i++) {
-            if (_listedTokens[i] == tokenId) {
-                _listedTokens[i] = _listedTokens[_listedTokens.length - 1];
-                _listedTokens.pop();
-                break;
-            }
-        }
-    }
-
-    function _sortMarketItemsByPrice(MarketItem[] memory items) internal pure {
-        for (uint256 i = 1; i < items.length; i++) {
-            MarketItem memory current = items[i];
-            uint256 j = i;
-            while (j > 0 && items[j - 1].price > current.price) {
-                items[j] = items[j - 1];
-                j--;
-            }
-            items[j] = current;
-        }
-    }
-
-    function onERC721Received(
-        address,
-        address,
-        uint256,
-        bytes calldata
-    ) external pure override returns (bytes4) {
-        return IERC721Receiver.onERC721Received.selector;
+    function getMarketplaceInfo() external view returns (
+        uint256 creditBalance,
+        uint256 xrplBalance,
+        uint256 currentBuyPrice,
+        uint256 currentSellPrice
+    ) {
+        creditBalance = carbonCreditToken.balanceOf(address(this));
+        xrplBalance = xrplToken.balanceOf(address(this));
+        currentBuyPrice = buyPrice;
+        currentSellPrice = sellPrice;
     }
 }

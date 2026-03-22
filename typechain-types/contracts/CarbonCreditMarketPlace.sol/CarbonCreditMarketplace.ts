@@ -23,108 +23,110 @@ import type {
   TypedContractMethod,
 } from "../../common";
 
-export declare namespace CarbonCreditMarketplace {
-  export type MarketItemStruct = { tokenId: BigNumberish; price: BigNumberish };
-
-  export type MarketItemStructOutput = [tokenId: bigint, price: bigint] & {
-    tokenId: bigint;
-    price: bigint;
-  };
-}
-
 export interface CarbonCreditMarketplaceInterface extends Interface {
   getFunction(
     nameOrSignature:
-      | "buyCredit"
-      | "carbonCreditContract"
-      | "creditsForSale"
-      | "getAllListingsSortedByPrice"
-      | "listCreditForSale"
-      | "marketplaceBalance"
-      | "onERC721Received"
+      | "buyCredits"
+      | "buyPrice"
+      | "carbonCreditToken"
+      | "getMarketplaceInfo"
       | "owner"
-      | "withdrawFunds"
+      | "sellCredits"
+      | "sellPrice"
+      | "setBuyPrice"
+      | "setSellPrice"
+      | "withdrawCredits"
+      | "withdrawXrpl"
       | "xrplToken"
   ): FunctionFragment;
 
   getEvent(
-    nameOrSignatureOrTopic: "CreditListed" | "CreditSold"
+    nameOrSignatureOrTopic: "CreditsPurchased" | "CreditsSold" | "PriceUpdated"
   ): EventFragment;
 
   encodeFunctionData(
-    functionFragment: "buyCredit",
-    values: [BigNumberish, BigNumberish]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "carbonCreditContract",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "creditsForSale",
+    functionFragment: "buyCredits",
     values: [BigNumberish]
   ): string;
+  encodeFunctionData(functionFragment: "buyPrice", values?: undefined): string;
   encodeFunctionData(
-    functionFragment: "getAllListingsSortedByPrice",
+    functionFragment: "carbonCreditToken",
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "listCreditForSale",
-    values: [BigNumberish, BigNumberish]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "marketplaceBalance",
+    functionFragment: "getMarketplaceInfo",
     values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "onERC721Received",
-    values: [AddressLike, AddressLike, BigNumberish, BytesLike]
   ): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
-    functionFragment: "withdrawFunds",
+    functionFragment: "sellCredits",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(functionFragment: "sellPrice", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "setBuyPrice",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setSellPrice",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "withdrawCredits",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "withdrawXrpl",
     values: [BigNumberish]
   ): string;
   encodeFunctionData(functionFragment: "xrplToken", values?: undefined): string;
 
-  decodeFunctionResult(functionFragment: "buyCredit", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "buyCredits", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "buyPrice", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "carbonCreditContract",
+    functionFragment: "carbonCreditToken",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "creditsForSale",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "getAllListingsSortedByPrice",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "listCreditForSale",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "marketplaceBalance",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "onERC721Received",
+    functionFragment: "getMarketplaceInfo",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "withdrawFunds",
+    functionFragment: "sellCredits",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "sellPrice", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "setBuyPrice",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "setSellPrice",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "withdrawCredits",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "withdrawXrpl",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "xrplToken", data: BytesLike): Result;
 }
 
-export namespace CreditListedEvent {
-  export type InputTuple = [tokenId: BigNumberish, price: BigNumberish];
-  export type OutputTuple = [tokenId: bigint, price: bigint];
+export namespace CreditsPurchasedEvent {
+  export type InputTuple = [
+    buyer: AddressLike,
+    amount: BigNumberish,
+    totalCost: BigNumberish
+  ];
+  export type OutputTuple = [buyer: string, amount: bigint, totalCost: bigint];
   export interface OutputObject {
-    tokenId: bigint;
-    price: bigint;
+    buyer: string;
+    amount: bigint;
+    totalCost: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -132,17 +134,37 @@ export namespace CreditListedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace CreditSoldEvent {
+export namespace CreditsSoldEvent {
   export type InputTuple = [
-    tokenId: BigNumberish,
-    buyer: AddressLike,
-    price: BigNumberish
+    seller: AddressLike,
+    amount: BigNumberish,
+    totalPayout: BigNumberish
   ];
-  export type OutputTuple = [tokenId: bigint, buyer: string, price: bigint];
+  export type OutputTuple = [
+    seller: string,
+    amount: bigint,
+    totalPayout: bigint
+  ];
   export interface OutputObject {
-    tokenId: bigint;
-    buyer: string;
-    price: bigint;
+    seller: string;
+    amount: bigint;
+    totalPayout: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace PriceUpdatedEvent {
+  export type InputTuple = [
+    newBuyPrice: BigNumberish,
+    newSellPrice: BigNumberish
+  ];
+  export type OutputTuple = [newBuyPrice: bigint, newSellPrice: bigint];
+  export interface OutputObject {
+    newBuyPrice: bigint;
+    newSellPrice: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -193,39 +215,54 @@ export interface CarbonCreditMarketplace extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
-  buyCredit: TypedContractMethod<
-    [tokenId: BigNumberish, offerPrice: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
+  buyCredits: TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
 
-  carbonCreditContract: TypedContractMethod<[], [string], "view">;
+  buyPrice: TypedContractMethod<[], [bigint], "view">;
 
-  creditsForSale: TypedContractMethod<[arg0: BigNumberish], [bigint], "view">;
+  carbonCreditToken: TypedContractMethod<[], [string], "view">;
 
-  getAllListingsSortedByPrice: TypedContractMethod<
+  getMarketplaceInfo: TypedContractMethod<
     [],
-    [CarbonCreditMarketplace.MarketItemStructOutput[]],
-    "view"
-  >;
-
-  listCreditForSale: TypedContractMethod<
-    [tokenId: BigNumberish, price: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
-
-  marketplaceBalance: TypedContractMethod<[], [bigint], "view">;
-
-  onERC721Received: TypedContractMethod<
-    [arg0: AddressLike, arg1: AddressLike, arg2: BigNumberish, arg3: BytesLike],
-    [string],
+    [
+      [bigint, bigint, bigint, bigint] & {
+        creditBalance: bigint;
+        xrplBalance: bigint;
+        currentBuyPrice: bigint;
+        currentSellPrice: bigint;
+      }
+    ],
     "view"
   >;
 
   owner: TypedContractMethod<[], [string], "view">;
 
-  withdrawFunds: TypedContractMethod<
+  sellCredits: TypedContractMethod<
+    [amount: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
+  sellPrice: TypedContractMethod<[], [bigint], "view">;
+
+  setBuyPrice: TypedContractMethod<
+    [newPrice: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
+  setSellPrice: TypedContractMethod<
+    [newPrice: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
+  withdrawCredits: TypedContractMethod<
+    [amount: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
+  withdrawXrpl: TypedContractMethod<
     [amount: BigNumberish],
     [void],
     "nonpayable"
@@ -238,88 +275,107 @@ export interface CarbonCreditMarketplace extends BaseContract {
   ): T;
 
   getFunction(
-    nameOrSignature: "buyCredit"
-  ): TypedContractMethod<
-    [tokenId: BigNumberish, offerPrice: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
+    nameOrSignature: "buyCredits"
+  ): TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
   getFunction(
-    nameOrSignature: "carbonCreditContract"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "creditsForSale"
-  ): TypedContractMethod<[arg0: BigNumberish], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "getAllListingsSortedByPrice"
-  ): TypedContractMethod<
-    [],
-    [CarbonCreditMarketplace.MarketItemStructOutput[]],
-    "view"
-  >;
-  getFunction(
-    nameOrSignature: "listCreditForSale"
-  ): TypedContractMethod<
-    [tokenId: BigNumberish, price: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
-  getFunction(
-    nameOrSignature: "marketplaceBalance"
+    nameOrSignature: "buyPrice"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
-    nameOrSignature: "onERC721Received"
+    nameOrSignature: "carbonCreditToken"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "getMarketplaceInfo"
   ): TypedContractMethod<
-    [arg0: AddressLike, arg1: AddressLike, arg2: BigNumberish, arg3: BytesLike],
-    [string],
+    [],
+    [
+      [bigint, bigint, bigint, bigint] & {
+        creditBalance: bigint;
+        xrplBalance: bigint;
+        currentBuyPrice: bigint;
+        currentSellPrice: bigint;
+      }
+    ],
     "view"
   >;
   getFunction(
     nameOrSignature: "owner"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
-    nameOrSignature: "withdrawFunds"
+    nameOrSignature: "sellCredits"
+  ): TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "sellPrice"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "setBuyPrice"
+  ): TypedContractMethod<[newPrice: BigNumberish], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "setSellPrice"
+  ): TypedContractMethod<[newPrice: BigNumberish], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "withdrawCredits"
+  ): TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "withdrawXrpl"
   ): TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "xrplToken"
   ): TypedContractMethod<[], [string], "view">;
 
   getEvent(
-    key: "CreditListed"
+    key: "CreditsPurchased"
   ): TypedContractEvent<
-    CreditListedEvent.InputTuple,
-    CreditListedEvent.OutputTuple,
-    CreditListedEvent.OutputObject
+    CreditsPurchasedEvent.InputTuple,
+    CreditsPurchasedEvent.OutputTuple,
+    CreditsPurchasedEvent.OutputObject
   >;
   getEvent(
-    key: "CreditSold"
+    key: "CreditsSold"
   ): TypedContractEvent<
-    CreditSoldEvent.InputTuple,
-    CreditSoldEvent.OutputTuple,
-    CreditSoldEvent.OutputObject
+    CreditsSoldEvent.InputTuple,
+    CreditsSoldEvent.OutputTuple,
+    CreditsSoldEvent.OutputObject
+  >;
+  getEvent(
+    key: "PriceUpdated"
+  ): TypedContractEvent<
+    PriceUpdatedEvent.InputTuple,
+    PriceUpdatedEvent.OutputTuple,
+    PriceUpdatedEvent.OutputObject
   >;
 
   filters: {
-    "CreditListed(uint256,uint256)": TypedContractEvent<
-      CreditListedEvent.InputTuple,
-      CreditListedEvent.OutputTuple,
-      CreditListedEvent.OutputObject
+    "CreditsPurchased(address,uint256,uint256)": TypedContractEvent<
+      CreditsPurchasedEvent.InputTuple,
+      CreditsPurchasedEvent.OutputTuple,
+      CreditsPurchasedEvent.OutputObject
     >;
-    CreditListed: TypedContractEvent<
-      CreditListedEvent.InputTuple,
-      CreditListedEvent.OutputTuple,
-      CreditListedEvent.OutputObject
+    CreditsPurchased: TypedContractEvent<
+      CreditsPurchasedEvent.InputTuple,
+      CreditsPurchasedEvent.OutputTuple,
+      CreditsPurchasedEvent.OutputObject
     >;
 
-    "CreditSold(uint256,address,uint256)": TypedContractEvent<
-      CreditSoldEvent.InputTuple,
-      CreditSoldEvent.OutputTuple,
-      CreditSoldEvent.OutputObject
+    "CreditsSold(address,uint256,uint256)": TypedContractEvent<
+      CreditsSoldEvent.InputTuple,
+      CreditsSoldEvent.OutputTuple,
+      CreditsSoldEvent.OutputObject
     >;
-    CreditSold: TypedContractEvent<
-      CreditSoldEvent.InputTuple,
-      CreditSoldEvent.OutputTuple,
-      CreditSoldEvent.OutputObject
+    CreditsSold: TypedContractEvent<
+      CreditsSoldEvent.InputTuple,
+      CreditsSoldEvent.OutputTuple,
+      CreditsSoldEvent.OutputObject
+    >;
+
+    "PriceUpdated(uint256,uint256)": TypedContractEvent<
+      PriceUpdatedEvent.InputTuple,
+      PriceUpdatedEvent.OutputTuple,
+      PriceUpdatedEvent.OutputObject
+    >;
+    PriceUpdated: TypedContractEvent<
+      PriceUpdatedEvent.InputTuple,
+      PriceUpdatedEvent.OutputTuple,
+      PriceUpdatedEvent.OutputObject
     >;
   };
 }
