@@ -2,8 +2,8 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "C:\\Users\\nicky\\OneDrive\\Fintech Hackation 2025\\fintech-summit\\contracts\\CarbonCredit.sol": {
-      "lastModificationDate": 1774199372787,
-      "contentHash": "f373c77128c7d6684692ac05ac17e572",
+      "lastModificationDate": 1774207026376,
+      "contentHash": "04bb4f52136f0cbc998f857683c42de2",
       "sourceName": "contracts/CarbonCredit.sol",
       "solcConfig": {
         "version": "0.8.28",
@@ -307,8 +307,8 @@
       ]
     },
     "C:\\Users\\nicky\\OneDrive\\Fintech Hackation 2025\\fintech-summit\\contracts\\CarbonCreditMarketPlace.sol": {
-      "lastModificationDate": 1774197096195,
-      "contentHash": "9cee7de3ad8e26c0d6e6437b146c8c00",
+      "lastModificationDate": 1774208220551,
+      "contentHash": "99e3101f9132c27ac4334a35b7e583f6",
       "sourceName": "contracts/CarbonCreditMarketPlace.sol",
       "solcConfig": {
         "version": "0.8.28",
@@ -342,6 +342,44 @@
       ],
       "artifacts": [
         "CarbonCreditMarketplace"
+      ]
+    },
+    "C:\\Users\\nicky\\OneDrive\\Fintech Hackation 2025\\fintech-summit\\contracts\\MockXRPLToken.sol": {
+      "lastModificationDate": 1774208194472,
+      "contentHash": "f73da305ab2d933a0b87164cf68e350e",
+      "sourceName": "contracts/MockXRPLToken.sol",
+      "solcConfig": {
+        "version": "0.8.28",
+        "settings": {
+          "evmVersion": "paris",
+          "optimizer": {
+            "enabled": false,
+            "runs": 200
+          },
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "@openzeppelin/contracts/token/ERC20/ERC20.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.0"
+      ],
+      "artifacts": [
+        "MockXRPLToken"
       ]
     }
   }

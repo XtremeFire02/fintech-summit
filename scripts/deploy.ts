@@ -6,42 +6,52 @@ async function main() {
   const [deployer] = await ethers.getSigners();
   console.log("Deploying contracts with the account:", deployer.address);
 
+  // Deploy a mock XRPL token for local testing (on XRPL sidechain, use the real one)
+  const MockXRPL = await ethers.getContractFactory("MockXRPLToken");
+  const mockXrpl = await MockXRPL.deploy();
+  await mockXrpl.waitForDeployment();
+  const xrplTokenAddress = await mockXrpl.getAddress();
+  console.log("MockXRPLToken deployed to:", xrplTokenAddress);
+
   // Deploy the CarbonCredit ERC-20 contract
   const CarbonCredit = await ethers.getContractFactory("CarbonCredit");
   const carbonCredit = await CarbonCredit.deploy(deployer.address);
   await carbonCredit.waitForDeployment();
-
   const carbonCreditAddress = await carbonCredit.getAddress();
   console.log("CarbonCredit (ERC-20) deployed to:", carbonCreditAddress);
 
-  // XRPL token address — replace with actual address on your network
-  const xrplTokenAddress = "0x39fBBABf11738317a448031930706cd3e612e1B9";
-
-  // Initial prices (in XRPL token wei — 18 decimals)
-  // e.g. 100 XRPL tokens per carbon credit
-  const initialBuyPrice = ethers.parseUnits("100", 18);
-  const initialSellPrice = ethers.parseUnits("80", 18);
-
-  // Deploy the CarbonCreditMarketplace
+  // Deploy the CarbonCreditMarketplace (AMM)
   const CarbonCreditMarketplace = await ethers.getContractFactory("CarbonCreditMarketplace");
   const marketplace = await CarbonCreditMarketplace.deploy(
     carbonCreditAddress,
-    xrplTokenAddress,
-    initialBuyPrice,
-    initialSellPrice
+    xrplTokenAddress
   );
   await marketplace.waitForDeployment();
-
   const marketplaceAddress = await marketplace.getAddress();
-  console.log("CarbonCreditMarketplace deployed to:", marketplaceAddress);
+  console.log("CarbonCreditMarketplace (AMM) deployed to:", marketplaceAddress);
 
-  // Seed the marketplace with initial credits
-  const seedAmount = 1000;
-  const mintTx = await carbonCredit.mintCredits(marketplaceAddress, seedAmount);
+  // Seed the liquidity pool with 1000 credits + 100,000 XRPL
+  // This sets the initial price at 100 XRPL per credit
+  const seedCredits = ethers.parseUnits("1000", 18);
+  const seedXrpl = ethers.parseUnits("100000", 18);
+
+  // Mint credits to deployer
+  const mintTx = await carbonCredit.mintCredits(deployer.address, seedCredits);
   await mintTx.wait();
-  console.log(`Minted ${seedAmount} credits to marketplace`);
+  console.log("Minted 1000 credits to deployer");
 
-  // Write deployed addresses to frontend so App.js always has the right ones
+  // Approve marketplace to spend deployer's credits and XRPL
+  const approveCreditTx = await carbonCredit.approve(marketplaceAddress, seedCredits);
+  await approveCreditTx.wait();
+  const approveXrplTx = await mockXrpl.approve(marketplaceAddress, seedXrpl);
+  await approveXrplTx.wait();
+
+  // Add liquidity to the pool
+  const addLiqTx = await marketplace.addLiquidity(seedCredits, seedXrpl);
+  await addLiqTx.wait();
+  console.log("Added liquidity: 1000 credits + 100,000 XRPL");
+
+  // Write deployed addresses to frontend
   const addresses = {
     CARBON_CREDIT_ADDRESS: carbonCreditAddress,
     MARKETPLACE_ADDRESS: marketplaceAddress,
@@ -51,9 +61,10 @@ async function main() {
   fs.writeFileSync(outPath, JSON.stringify(addresses, null, 2));
   console.log("Wrote deployed addresses to:", outPath);
 
+  const spotPrice = await marketplace.getSpotPrice();
   console.log("\nDeployment completed!");
-  console.log("Buy price:", ethers.formatUnits(initialBuyPrice, 18), "XRPL per credit");
-  console.log("Sell price:", ethers.formatUnits(initialSellPrice, 18), "XRPL per credit");
+  console.log("Initial spot price:", ethers.formatUnits(spotPrice, 18), "XRPL per credit");
+  console.log("Pool: 1000 credits + 100,000 XRPL tokens");
 }
 
 main().catch((error) => {

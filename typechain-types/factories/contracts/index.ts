@@ -3,3 +3,4 @@
 /* eslint-disable */
 export * as carbonCreditMarketPlaceSol from "./CarbonCreditMarketPlace.sol";
 export { CarbonCredit__factory } from "./CarbonCredit__factory";
+export { MockXRPLToken__factory } from "./MockXRPLToken__factory";

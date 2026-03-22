@@ -12,10 +12,6 @@ contract CarbonCredit is ERC20, Ownable {
 
     constructor(address initialOwner) ERC20("CarbonCredit", "CREDIT") Ownable(initialOwner) {}
 
-    function decimals() public pure override returns (uint8) {
-        return 0;
-    }
-
     function mintCredits(address to, uint256 amount) external onlyOwner {
         require(amount > 0, "Amount must be > 0");
         _mint(to, amount);

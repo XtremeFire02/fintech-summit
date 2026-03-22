@@ -53,6 +53,10 @@ declare module "hardhat/types/runtime" {
       name: "CarbonCreditMarketplace",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.CarbonCreditMarketplace__factory>;
+    getContractFactory(
+      name: "MockXRPLToken",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockXRPLToken__factory>;
 
     getContractAt(
       name: "Ownable",
@@ -104,6 +108,11 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.CarbonCreditMarketplace>;
+    getContractAt(
+      name: "MockXRPLToken",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockXRPLToken>;
 
     deployContract(
       name: "Ownable",
@@ -145,6 +154,10 @@ declare module "hardhat/types/runtime" {
       name: "CarbonCreditMarketplace",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.CarbonCreditMarketplace>;
+    deployContract(
+      name: "MockXRPLToken",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockXRPLToken>;
 
     deployContract(
       name: "Ownable",
@@ -196,6 +209,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.CarbonCreditMarketplace>;
+    deployContract(
+      name: "MockXRPLToken",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockXRPLToken>;
 
     // default types
     getContractFactory(

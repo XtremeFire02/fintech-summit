@@ -23,6 +23,7 @@ import {
 import { Line } from "react-chartjs-2";
 import carbonCreditABI from "./contracts/CarbonCredit.json";
 import marketplaceABI from "./contracts/CarbonCreditMarketplace.json";
+import deployedAddresses from "./contracts/deployed-addresses.json";
 import homeIcon from "./icons/home.png";
 import marketplaceIcon from "./icons/marketplace.png";
 import userIcon from "./icons/user.png";
@@ -38,10 +39,10 @@ ChartJS.register(
   Legend
 );
 
-// These addresses are set by deploy.ts — update after each redeployment
-const CARBON_CREDIT_ADDRESS = "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9";
-const MARKETPLACE_ADDRESS = "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9";
-const XRPL_TOKEN_ADDRESS = "0x39fBBABf11738317a448031930706cd3e612e1B9";
+// Addresses are auto-loaded from deployed-addresses.json (written by deploy.ts)
+const CARBON_CREDIT_ADDRESS = deployedAddresses.CARBON_CREDIT_ADDRESS;
+const MARKETPLACE_ADDRESS = deployedAddresses.MARKETPLACE_ADDRESS;
+const XRPL_TOKEN_ADDRESS = deployedAddresses.XRPL_TOKEN_ADDRESS;
 
 const ERC20_ABI = [
   "function approve(address spender, uint256 amount) external returns (bool)",
@@ -101,8 +102,6 @@ function App() {
   const [queriedBalance, setQueriedBalance] = useState("");
   const [currentUserAddress, setCurrentUserAddress] = useState("");
   const [contractOwnerAddress, setContractOwnerAddress] = useState("");
-  const [setBuyPriceInput, setSetBuyPriceInput] = useState("");
-  const [setSellPriceInput, setSetSellPriceInput] = useState("");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState("home");
   const [showModal, setShowModal] = useState(false);
@@ -220,12 +219,9 @@ function App() {
     try {
       const info = await marketplaceContract.getMarketplaceInfo();
       setMarketplaceInfo({
-        creditBalance: info[0].toString(),
-        xrplBalance: formatUnits(info[1], 18),
-        buyPrice: formatUnits(info[2], 18),
-        sellPrice: formatUnits(info[3], 18),
-        buyPriceRaw: info[2],
-        sellPriceRaw: info[3]
+        creditReserve: formatUnits(info[0], 18),
+        xrplReserve: formatUnits(info[1], 18),
+        spotPrice: formatUnits(info[2], 18)
       });
     } catch (err) {
       console.error(err);
@@ -235,22 +231,21 @@ function App() {
 
   const handleBuyCredits = async () => {
     if (!marketplaceContract || !xrplTokenContract) return;
-    const parsed = parseInt(buyAmount, 10);
-    if (!parsed || parsed <= 0 || isNaN(parsed)) {
-      handleShowPopup("Warning", "Please enter a valid whole number of credits to buy.");
+    const val = parseFloat(buyAmount);
+    if (isNaN(val) || val <= 0) {
+      handleShowPopup("Warning", "Please enter a valid number of credits to buy.");
       return;
     }
     try {
-      const amount = BigInt(parsed);
-      const info = await marketplaceContract.getMarketplaceInfo();
-      const totalCost = amount * info[2];
-      const approveTx = await xrplTokenContract.approve(MARKETPLACE_ADDRESS, totalCost);
+      const amount = parseUnits(buyAmount, 18);
+      const xrplRequired = await marketplaceContract.getBuyQuote(amount);
+      const approveTx = await xrplTokenContract.approve(MARKETPLACE_ADDRESS, xrplRequired);
       await approveTx.wait();
       const tx = await marketplaceContract.buyCredits(amount);
       await tx.wait();
       handleShowPopup(
         "Purchase Complete",
-        `You bought ${parsed} credit(s) for ${formatUnits(totalCost, 18)} XRPL tokens.`
+        `You bought ${buyAmount} credit(s) for ${formatUnits(xrplRequired, 18)} XRPL tokens.`
       );
       fetchMarketplaceInfo();
     } catch (err) {
@@ -261,22 +256,21 @@ function App() {
 
   const handleSellCredits = async () => {
     if (!marketplaceContract || !carbonCreditContract) return;
-    const parsed = parseInt(sellAmount, 10);
-    if (!parsed || parsed <= 0 || isNaN(parsed)) {
-      handleShowPopup("Warning", "Please enter a valid whole number of credits to sell.");
+    const val = parseFloat(sellAmount);
+    if (isNaN(val) || val <= 0) {
+      handleShowPopup("Warning", "Please enter a valid number of credits to sell.");
       return;
     }
     try {
-      const amount = BigInt(parsed);
-      const info = await marketplaceContract.getMarketplaceInfo();
-      const totalPayout = amount * info[3];
+      const amount = parseUnits(sellAmount, 18);
+      const xrplOut = await marketplaceContract.getSellQuote(amount);
       const approveTx = await carbonCreditContract.approve(MARKETPLACE_ADDRESS, amount);
       await approveTx.wait();
       const tx = await marketplaceContract.sellCredits(amount);
       await tx.wait();
       handleShowPopup(
         "Sale Complete",
-        `You sold ${parsed} credit(s) for ${formatUnits(totalPayout, 18)} XRPL tokens.`
+        `You sold ${sellAmount} credit(s) for ${formatUnits(xrplOut, 18)} XRPL tokens.`
       );
       fetchMarketplaceInfo();
     } catch (err) {
@@ -290,8 +284,8 @@ function App() {
     try {
       const addr = await signer.getAddress();
       const bal = await carbonCreditContract.balanceOf(addr);
-      setCreditBalance(bal.toString());
-      handleShowPopup("Balance Retrieved", `You hold ${bal.toString()} carbon credit(s).`);
+      setCreditBalance(formatUnits(bal, 18));
+      handleShowPopup("Balance Retrieved", `You hold ${formatUnits(bal, 18)} carbon credit(s).`);
     } catch (err) {
       console.error(err);
       handleShowPopup("Error!", "Failed to retrieve credit balance.");
@@ -318,10 +312,10 @@ function App() {
     }
     try {
       const bal = await carbonCreditContract.balanceOf(ownerAddressQuery);
-      setQueriedBalance(bal.toString());
+      setQueriedBalance(formatUnits(bal, 18));
       handleShowPopup(
         "Query Complete",
-        `Address holds ${bal.toString()} carbon credit(s).`
+        `Address holds ${formatUnits(bal, 18)} carbon credit(s).`
       );
     } catch (err) {
       console.error(err);
@@ -331,19 +325,20 @@ function App() {
 
   const handleMintBatch = async () => {
     if (!carbonCreditContract || !signer) return;
-    const parsed = parseInt(batchMintNumber, 10);
-    if (!parsed || parsed <= 0 || isNaN(parsed)) {
-      handleShowPopup("Warning", "Please enter a valid whole number of credits to mint.");
+    const val = parseFloat(batchMintNumber);
+    if (isNaN(val) || val <= 0) {
+      handleShowPopup("Warning", "Please enter a valid number of credits to mint.");
       return;
     }
     try {
       const toAddress =
         mintToAddress.trim() !== "" ? mintToAddress : await signer.getAddress();
-      const tx = await carbonCreditContract.mintCredits(toAddress, parsed);
+      const amount = parseUnits(batchMintNumber, 18);
+      const tx = await carbonCreditContract.mintCredits(toAddress, amount);
       await tx.wait();
       handleShowPopup(
         "Minting Success",
-        `Minted ${parsed} credits to ${toAddress}.`
+        `Minted ${batchMintNumber} credits to ${toAddress}.`
       );
     } catch (err) {
       console.error(err);
@@ -353,9 +348,9 @@ function App() {
 
   const handleRedeem = async () => {
     if (!carbonCreditContract) return;
-    const parsed = parseInt(redeemAmount, 10);
-    if (!parsed || parsed <= 0 || isNaN(parsed)) {
-      handleShowPopup("Warning", "Please enter a valid whole number of credits to redeem.");
+    const val = parseFloat(redeemAmount);
+    if (isNaN(val) || val <= 0) {
+      handleShowPopup("Warning", "Please enter a valid number of credits to redeem.");
       return;
     }
     if (!redeemEmissionId || redeemEmissionId.trim() === "") {
@@ -363,11 +358,12 @@ function App() {
       return;
     }
     try {
-      const tx = await carbonCreditContract.redeemCredits(parsed, redeemEmissionId.trim());
+      const amount = parseUnits(redeemAmount, 18);
+      const tx = await carbonCreditContract.redeemCredits(amount, redeemEmissionId.trim());
       await tx.wait();
       handleShowPopup(
         "Redeemed",
-        `${parsed} credit(s) redeemed for emission: ${redeemEmissionId.trim()}`
+        `${redeemAmount} credit(s) redeemed for emission: ${redeemEmissionId.trim()}`
       );
     } catch (err) {
       console.error(err);
@@ -375,41 +371,52 @@ function App() {
     }
   };
 
-  const handleSetBuyPrice = async () => {
-    if (!marketplaceContract) return;
-    const val = parseFloat(setBuyPriceInput);
-    if (!val || val <= 0 || isNaN(val)) {
-      handleShowPopup("Warning", "Please enter a valid positive price.");
+  const [addLiqCredits, setAddLiqCredits] = useState("");
+  const [addLiqXrpl, setAddLiqXrpl] = useState("");
+
+  const handleAddLiquidity = async () => {
+    if (!marketplaceContract || !carbonCreditContract || !xrplTokenContract) return;
+    const credVal = parseFloat(addLiqCredits);
+    const xrplVal = parseFloat(addLiqXrpl);
+    if (isNaN(credVal) || credVal <= 0 || isNaN(xrplVal) || xrplVal <= 0) {
+      handleShowPopup("Warning", "Please enter valid amounts for both tokens.");
       return;
     }
     try {
-      const priceBN = parseUnits(setBuyPriceInput, 18);
-      const tx = await marketplaceContract.setBuyPrice(priceBN);
+      const creditAmount = parseUnits(addLiqCredits, 18);
+      const xrplAmount = parseUnits(addLiqXrpl, 18);
+      const approveCreditTx = await carbonCreditContract.approve(MARKETPLACE_ADDRESS, creditAmount);
+      await approveCreditTx.wait();
+      const approveXrplTx = await xrplTokenContract.approve(MARKETPLACE_ADDRESS, xrplAmount);
+      await approveXrplTx.wait();
+      const tx = await marketplaceContract.addLiquidity(creditAmount, xrplAmount);
       await tx.wait();
-      handleShowPopup("Price Updated", `Buy price set to ${setBuyPriceInput} XRPL per credit.`);
+      handleShowPopup("Liquidity Added", `Added ${addLiqCredits} credits + ${addLiqXrpl} XRPL to pool.`);
       fetchMarketplaceInfo();
     } catch (err) {
       console.error(err);
-      handleShowPopup("Error!", err.reason || "Failed to set buy price.");
+      handleShowPopup("Error!", err.reason || "Failed to add liquidity.");
     }
   };
 
-  const handleSetSellPrice = async () => {
+  const handleRemoveLiquidity = async () => {
     if (!marketplaceContract) return;
-    const val = parseFloat(setSellPriceInput);
-    if (!val || val <= 0 || isNaN(val)) {
-      handleShowPopup("Warning", "Please enter a valid positive price.");
+    const credVal = parseFloat(addLiqCredits);
+    const xrplVal = parseFloat(addLiqXrpl);
+    if (isNaN(credVal) || credVal <= 0 || isNaN(xrplVal) || xrplVal <= 0) {
+      handleShowPopup("Warning", "Please enter valid amounts for both tokens.");
       return;
     }
     try {
-      const priceBN = parseUnits(setSellPriceInput, 18);
-      const tx = await marketplaceContract.setSellPrice(priceBN);
+      const creditAmount = parseUnits(addLiqCredits, 18);
+      const xrplAmount = parseUnits(addLiqXrpl, 18);
+      const tx = await marketplaceContract.removeLiquidity(creditAmount, xrplAmount);
       await tx.wait();
-      handleShowPopup("Price Updated", `Sell price set to ${setSellPriceInput} XRPL per credit.`);
+      handleShowPopup("Liquidity Removed", `Removed ${addLiqCredits} credits + ${addLiqXrpl} XRPL from pool.`);
       fetchMarketplaceInfo();
     } catch (err) {
       console.error(err);
-      handleShowPopup("Error!", err.reason || "Failed to set sell price.");
+      handleShowPopup("Error!", err.reason || "Failed to remove liquidity.");
     }
   };
 
@@ -438,6 +445,7 @@ function App() {
             handleSellCredits={handleSellCredits}
             marketplaceInfo={marketplaceInfo}
             fetchMarketplaceInfo={fetchMarketplaceInfo}
+            marketplaceContract={marketplaceContract}
             nodeRef={nodeRefs["marketplace"]}
           />
         );
@@ -470,12 +478,12 @@ function App() {
             mintToAddress={mintToAddress}
             setMintToAddress={setMintToAddress}
             handleMintBatch={handleMintBatch}
-            setBuyPriceInput={setBuyPriceInput}
-            setSetBuyPriceInput={setSetBuyPriceInput}
-            setSellPriceInput={setSellPriceInput}
-            setSetSellPriceInput={setSetSellPriceInput}
-            handleSetBuyPrice={handleSetBuyPrice}
-            handleSetSellPrice={handleSetSellPrice}
+            addLiqCredits={addLiqCredits}
+            setAddLiqCredits={setAddLiqCredits}
+            addLiqXrpl={addLiqXrpl}
+            setAddLiqXrpl={setAddLiqXrpl}
+            handleAddLiquidity={handleAddLiquidity}
+            handleRemoveLiquidity={handleRemoveLiquidity}
             marketplaceInfo={marketplaceInfo}
             fetchMarketplaceInfo={fetchMarketplaceInfo}
             contractOwnerAddress={contractOwnerAddress}
@@ -781,6 +789,7 @@ function MarketplaceTab({
   handleSellCredits,
   marketplaceInfo,
   fetchMarketplaceInfo,
+  marketplaceContract,
   nodeRef
 }) {
   const fancyCardStyle = {
@@ -810,19 +819,44 @@ function MarketplaceTab({
     margin: 0
   };
 
-  const parsedBuy = parseInt(buyAmount, 10);
-  const buyTotal =
-    parsedBuy > 0 && marketplaceInfo && marketplaceInfo.buyPriceRaw
+  const [buyQuote, setBuyQuote] = useState(null);
+  const [sellQuote, setSellQuote] = useState(null);
 
-      ? (BigInt(parsedBuy) * BigInt(marketplaceInfo.buyPriceRaw)).toString()
-      : null;
+  React.useEffect(() => {
+    const fetchQuote = async () => {
+      if (!marketplaceContract || !buyAmount) { setBuyQuote(null); return; }
+      try {
+        const val = parseFloat(buyAmount);
+        if (isNaN(val) || val <= 0) { setBuyQuote(null); return; }
+        const amount = parseUnits(buyAmount, 18);
+        const quote = await marketplaceContract.getBuyQuote(amount);
+        setBuyQuote(formatUnits(quote, 18));
+      } catch { setBuyQuote(null); }
+    };
+    fetchQuote();
+  }, [buyAmount, marketplaceContract]);
 
-  const parsedSell = parseInt(sellAmount, 10);
-  const sellTotal =
-    parsedSell > 0 && marketplaceInfo && marketplaceInfo.sellPriceRaw
+  React.useEffect(() => {
+    const fetchQuote = async () => {
+      if (!marketplaceContract || !sellAmount) { setSellQuote(null); return; }
+      try {
+        const val = parseFloat(sellAmount);
+        if (isNaN(val) || val <= 0) { setSellQuote(null); return; }
+        const amount = parseUnits(sellAmount, 18);
+        const quote = await marketplaceContract.getSellQuote(amount);
+        setSellQuote(formatUnits(quote, 18));
+      } catch { setSellQuote(null); }
+    };
+    fetchQuote();
+  }, [sellAmount, marketplaceContract]);
 
-      ? (BigInt(parsedSell) * BigInt(marketplaceInfo.sellPriceRaw)).toString()
-      : null;
+  const priceImpactBuy = marketplaceInfo && buyQuote && buyAmount && parseFloat(buyAmount) > 0
+    ? (((parseFloat(buyQuote) / parseFloat(buyAmount)) - parseFloat(marketplaceInfo.spotPrice)) / parseFloat(marketplaceInfo.spotPrice) * 100).toFixed(2)
+    : null;
+
+  const priceImpactSell = marketplaceInfo && sellQuote && sellAmount && parseFloat(sellAmount) > 0
+    ? ((parseFloat(marketplaceInfo.spotPrice) - (parseFloat(sellQuote) / parseFloat(sellAmount))) / parseFloat(marketplaceInfo.spotPrice) * 100).toFixed(2)
+    : null;
 
   return (
     <div ref={nodeRef}>
@@ -841,28 +875,22 @@ function MarketplaceTab({
             <p>Click Refresh to load marketplace data.</p>
           ) : (
             <div className="row">
-              <div className="col-md-3 text-center mb-2">
-                <strong>Buy Price</strong>
+              <div className="col-md-4 text-center mb-2">
+                <strong>Spot Price</strong>
                 <div style={{ fontSize: "1.5rem", color: "#198754" }}>
-                  {marketplaceInfo.buyPrice} XRPL
+                  {parseFloat(marketplaceInfo.spotPrice).toFixed(4)} XRPL / credit
                 </div>
               </div>
-              <div className="col-md-3 text-center mb-2">
-                <strong>Sell Price</strong>
-                <div style={{ fontSize: "1.5rem", color: "#dc3545" }}>
-                  {marketplaceInfo.sellPrice} XRPL
-                </div>
-              </div>
-              <div className="col-md-3 text-center mb-2">
+              <div className="col-md-4 text-center mb-2">
                 <strong>Credits in Pool</strong>
                 <div style={{ fontSize: "1.5rem" }}>
-                  {marketplaceInfo.creditBalance}
+                  {parseFloat(marketplaceInfo.creditReserve).toFixed(4)}
                 </div>
               </div>
-              <div className="col-md-3 text-center mb-2">
+              <div className="col-md-4 text-center mb-2">
                 <strong>XRPL in Pool</strong>
                 <div style={{ fontSize: "1.5rem" }}>
-                  {marketplaceInfo.xrplBalance}
+                  {parseFloat(marketplaceInfo.xrplReserve).toFixed(4)}
                 </div>
               </div>
             </div>
@@ -882,15 +910,26 @@ function MarketplaceTab({
             <input
               type="number"
               className="form-control"
-              min="1"
+              step="any"
+              min="0"
               value={buyAmount}
               onChange={(e) => setBuyAmount(e.target.value)}
             />
           </div>
-          {buyTotal && (
-            <p>
-              <strong>Total Cost:</strong> {formatUnits(buyTotal, 18)} XRPL tokens
-            </p>
+          {buyQuote && (
+            <div className="mb-2">
+              <p className="mb-1">
+                <strong>Estimated Cost:</strong> {parseFloat(buyQuote).toFixed(6)} XRPL tokens
+              </p>
+              {priceImpactBuy && (
+                <p className="mb-0 text-muted" style={{ fontSize: "0.9rem" }}>
+                  <strong>Price Impact:</strong>{" "}
+                  <span style={{ color: parseFloat(priceImpactBuy) > 5 ? "#dc3545" : "#198754" }}>
+                    {priceImpactBuy}%
+                  </span>
+                </p>
+              )}
+            </div>
           )}
           <button
             className="btn btn-success animated-btn"
@@ -913,15 +952,26 @@ function MarketplaceTab({
             <input
               type="number"
               className="form-control"
-              min="1"
+              step="any"
+              min="0"
               value={sellAmount}
               onChange={(e) => setSellAmount(e.target.value)}
             />
           </div>
-          {sellTotal && (
-            <p>
-              <strong>Total Payout:</strong> {formatUnits(sellTotal, 18)} XRPL tokens
-            </p>
+          {sellQuote && (
+            <div className="mb-2">
+              <p className="mb-1">
+                <strong>Estimated Payout:</strong> {parseFloat(sellQuote).toFixed(6)} XRPL tokens
+              </p>
+              {priceImpactSell && (
+                <p className="mb-0 text-muted" style={{ fontSize: "0.9rem" }}>
+                  <strong>Price Impact:</strong>{" "}
+                  <span style={{ color: parseFloat(priceImpactSell) > 5 ? "#dc3545" : "#198754" }}>
+                    {priceImpactSell}%
+                  </span>
+                </p>
+              )}
+            </div>
           )}
           <button
             className="btn btn-primary animated-btn"
@@ -1058,7 +1108,8 @@ function UserTab({
             <input
               type="number"
               className="form-control"
-              min="1"
+              step="any"
+              min="0"
               value={redeemAmount}
               onChange={(e) => setRedeemAmount(e.target.value)}
             />
@@ -1102,12 +1153,12 @@ function AdminTab({
   mintToAddress,
   setMintToAddress,
   handleMintBatch,
-  setBuyPriceInput,
-  setSetBuyPriceInput,
-  setSellPriceInput,
-  setSetSellPriceInput,
-  handleSetBuyPrice,
-  handleSetSellPrice,
+  addLiqCredits,
+  setAddLiqCredits,
+  addLiqXrpl,
+  setAddLiqXrpl,
+  handleAddLiquidity,
+  handleRemoveLiquidity,
   marketplaceInfo,
   fetchMarketplaceInfo,
   contractOwnerAddress,
@@ -1164,8 +1215,8 @@ function AdminTab({
 
   const handleRedeemForEmission = async (emissionId, quantity) => {
     try {
-      const amount = parseInt(quantity, 10);
-      if (!amount || amount <= 0 || isNaN(amount)) {
+      const val = parseFloat(quantity);
+      if (isNaN(val) || val <= 0) {
         handleShowPopup("Error!", `Invalid quantity "${quantity}" for emission ${emissionId}.`);
         return;
       }
@@ -1173,11 +1224,12 @@ function AdminTab({
         handleShowPopup("Error!", "Missing emission ID in CSV row.");
         return;
       }
+      const amount = parseUnits(String(quantity), 18);
       const tx = await carbonCreditContract.redeemCredits(amount, String(emissionId).trim());
       await tx.wait();
       handleShowPopup(
         "Redeemed",
-        `${amount} credit(s) redeemed for emission: ${emissionId}`
+        `${quantity} credit(s) redeemed for emission: ${emissionId}`
       );
     } catch (err) {
       console.error(err);
@@ -1234,6 +1286,8 @@ function AdminTab({
             <input
               type="number"
               className="form-control"
+              step="any"
+              min="0"
               value={batchMintNumber}
               onChange={(e) => setBatchMintNumber(e.target.value)}
             />
@@ -1255,38 +1309,45 @@ function AdminTab({
       </div>
       <div style={fancyCardStyle}>
         <div style={fancyCardHeader}>
-          <h3 style={bigHeadingStyle}>Set Marketplace Prices</h3>
+          <h3 style={bigHeadingStyle}>Manage Liquidity (AMM Pool)</h3>
         </div>
         <div style={fancyCardBody}>
+          <p className="text-muted">
+            Add or remove liquidity from the AMM pool. The ratio of credits to XRPL determines the spot price.
+          </p>
           <div className="mb-3">
-            <label>Buy Price (XRPL per credit):</label>
+            <label>Credit Amount:</label>
             <input
-              type="text"
+              type="number"
               className="form-control"
-              value={setBuyPriceInput}
-              onChange={(e) => setSetBuyPriceInput(e.target.value)}
+              step="any"
+              min="0"
+              value={addLiqCredits}
+              onChange={(e) => setAddLiqCredits(e.target.value)}
+            />
+          </div>
+          <div className="mb-3">
+            <label>XRPL Amount:</label>
+            <input
+              type="number"
+              className="form-control"
+              step="any"
+              min="0"
+              value={addLiqXrpl}
+              onChange={(e) => setAddLiqXrpl(e.target.value)}
             />
           </div>
           <button
-            className="btn btn-primary me-2 animated-btn"
-            onClick={handleSetBuyPrice}
+            className="btn btn-success me-2 animated-btn"
+            onClick={handleAddLiquidity}
           >
-            Set Buy Price
+            Add Liquidity
           </button>
-          <div className="mb-3 mt-3">
-            <label>Sell Price (XRPL per credit):</label>
-            <input
-              type="text"
-              className="form-control"
-              value={setSellPriceInput}
-              onChange={(e) => setSetSellPriceInput(e.target.value)}
-            />
-          </div>
           <button
-            className="btn btn-primary animated-btn"
-            onClick={handleSetSellPrice}
+            className="btn btn-danger animated-btn"
+            onClick={handleRemoveLiquidity}
           >
-            Set Sell Price
+            Remove Liquidity
           </button>
         </div>
       </div>
@@ -1305,10 +1366,9 @@ function AdminTab({
             <p>Click Refresh to load marketplace data.</p>
           ) : (
             <div>
-              <p><strong>Credits in Pool:</strong> {marketplaceInfo.creditBalance}</p>
-              <p><strong>XRPL in Pool:</strong> {marketplaceInfo.xrplBalance}</p>
-              <p><strong>Buy Price:</strong> {marketplaceInfo.buyPrice} XRPL</p>
-              <p><strong>Sell Price:</strong> {marketplaceInfo.sellPrice} XRPL</p>
+              <p><strong>Spot Price:</strong> {parseFloat(marketplaceInfo.spotPrice).toFixed(4)} XRPL / credit</p>
+              <p><strong>Credits in Pool:</strong> {parseFloat(marketplaceInfo.creditReserve).toFixed(4)}</p>
+              <p><strong>XRPL in Pool:</strong> {parseFloat(marketplaceInfo.xrplReserve).toFixed(4)}</p>
             </div>
           )}
         </div>

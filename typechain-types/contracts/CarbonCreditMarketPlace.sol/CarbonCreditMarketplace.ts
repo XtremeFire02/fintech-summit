@@ -26,91 +26,134 @@ import type {
 export interface CarbonCreditMarketplaceInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "FEE_DENOMINATOR"
+      | "FEE_NUMERATOR"
+      | "addLiquidity"
       | "buyCredits"
-      | "buyPrice"
       | "carbonCreditToken"
+      | "creditReserve"
+      | "getBuyQuote"
       | "getMarketplaceInfo"
+      | "getSellQuote"
+      | "getSpotPrice"
       | "owner"
+      | "removeLiquidity"
       | "sellCredits"
-      | "sellPrice"
-      | "setBuyPrice"
-      | "setSellPrice"
-      | "withdrawCredits"
-      | "withdrawXrpl"
+      | "xrplReserve"
       | "xrplToken"
   ): FunctionFragment;
 
   getEvent(
-    nameOrSignatureOrTopic: "CreditsPurchased" | "CreditsSold" | "PriceUpdated"
+    nameOrSignatureOrTopic:
+      | "CreditsPurchased"
+      | "CreditsSold"
+      | "LiquidityAdded"
+      | "LiquidityRemoved"
   ): EventFragment;
 
+  encodeFunctionData(
+    functionFragment: "FEE_DENOMINATOR",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "FEE_NUMERATOR",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "addLiquidity",
+    values: [BigNumberish, BigNumberish]
+  ): string;
   encodeFunctionData(
     functionFragment: "buyCredits",
     values: [BigNumberish]
   ): string;
-  encodeFunctionData(functionFragment: "buyPrice", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "carbonCreditToken",
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "creditReserve",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getBuyQuote",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "getMarketplaceInfo",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getSellQuote",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getSpotPrice",
     values?: undefined
   ): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
   encodeFunctionData(
+    functionFragment: "removeLiquidity",
+    values: [BigNumberish, BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "sellCredits",
     values: [BigNumberish]
   ): string;
-  encodeFunctionData(functionFragment: "sellPrice", values?: undefined): string;
   encodeFunctionData(
-    functionFragment: "setBuyPrice",
-    values: [BigNumberish]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "setSellPrice",
-    values: [BigNumberish]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "withdrawCredits",
-    values: [BigNumberish]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "withdrawXrpl",
-    values: [BigNumberish]
+    functionFragment: "xrplReserve",
+    values?: undefined
   ): string;
   encodeFunctionData(functionFragment: "xrplToken", values?: undefined): string;
 
+  decodeFunctionResult(
+    functionFragment: "FEE_DENOMINATOR",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "FEE_NUMERATOR",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "addLiquidity",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "buyCredits", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "buyPrice", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "carbonCreditToken",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "creditReserve",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getBuyQuote",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
     functionFragment: "getMarketplaceInfo",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(
+    functionFragment: "getSellQuote",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getSpotPrice",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "removeLiquidity",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "sellCredits",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "sellPrice", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "setBuyPrice",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "setSellPrice",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "withdrawCredits",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "withdrawXrpl",
+    functionFragment: "xrplReserve",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "xrplToken", data: BytesLike): Result;
@@ -119,14 +162,18 @@ export interface CarbonCreditMarketplaceInterface extends Interface {
 export namespace CreditsPurchasedEvent {
   export type InputTuple = [
     buyer: AddressLike,
-    amount: BigNumberish,
-    totalCost: BigNumberish
+    creditAmount: BigNumberish,
+    xrplPaid: BigNumberish
   ];
-  export type OutputTuple = [buyer: string, amount: bigint, totalCost: bigint];
+  export type OutputTuple = [
+    buyer: string,
+    creditAmount: bigint,
+    xrplPaid: bigint
+  ];
   export interface OutputObject {
     buyer: string;
-    amount: bigint;
-    totalCost: bigint;
+    creditAmount: bigint;
+    xrplPaid: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -137,18 +184,18 @@ export namespace CreditsPurchasedEvent {
 export namespace CreditsSoldEvent {
   export type InputTuple = [
     seller: AddressLike,
-    amount: BigNumberish,
-    totalPayout: BigNumberish
+    creditAmount: BigNumberish,
+    xrplReceived: BigNumberish
   ];
   export type OutputTuple = [
     seller: string,
-    amount: bigint,
-    totalPayout: bigint
+    creditAmount: bigint,
+    xrplReceived: bigint
   ];
   export interface OutputObject {
     seller: string;
-    amount: bigint;
-    totalPayout: bigint;
+    creditAmount: bigint;
+    xrplReceived: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -156,15 +203,43 @@ export namespace CreditsSoldEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace PriceUpdatedEvent {
+export namespace LiquidityAddedEvent {
   export type InputTuple = [
-    newBuyPrice: BigNumberish,
-    newSellPrice: BigNumberish
+    provider: AddressLike,
+    creditAmount: BigNumberish,
+    xrplAmount: BigNumberish
   ];
-  export type OutputTuple = [newBuyPrice: bigint, newSellPrice: bigint];
+  export type OutputTuple = [
+    provider: string,
+    creditAmount: bigint,
+    xrplAmount: bigint
+  ];
   export interface OutputObject {
-    newBuyPrice: bigint;
-    newSellPrice: bigint;
+    provider: string;
+    creditAmount: bigint;
+    xrplAmount: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace LiquidityRemovedEvent {
+  export type InputTuple = [
+    provider: AddressLike,
+    creditAmount: BigNumberish,
+    xrplAmount: BigNumberish
+  ];
+  export type OutputTuple = [
+    provider: string,
+    creditAmount: bigint,
+    xrplAmount: bigint
+  ];
+  export interface OutputObject {
+    provider: string;
+    creditAmount: bigint;
+    xrplAmount: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -215,58 +290,67 @@ export interface CarbonCreditMarketplace extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
-  buyCredits: TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
+  FEE_DENOMINATOR: TypedContractMethod<[], [bigint], "view">;
 
-  buyPrice: TypedContractMethod<[], [bigint], "view">;
+  FEE_NUMERATOR: TypedContractMethod<[], [bigint], "view">;
+
+  addLiquidity: TypedContractMethod<
+    [creditAmount: BigNumberish, xrplAmount: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
+  buyCredits: TypedContractMethod<
+    [creditAmountOut: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
 
   carbonCreditToken: TypedContractMethod<[], [string], "view">;
+
+  creditReserve: TypedContractMethod<[], [bigint], "view">;
+
+  getBuyQuote: TypedContractMethod<
+    [creditAmountOut: BigNumberish],
+    [bigint],
+    "view"
+  >;
 
   getMarketplaceInfo: TypedContractMethod<
     [],
     [
-      [bigint, bigint, bigint, bigint] & {
-        creditBalance: bigint;
-        xrplBalance: bigint;
-        currentBuyPrice: bigint;
-        currentSellPrice: bigint;
+      [bigint, bigint, bigint] & {
+        _creditReserve: bigint;
+        _xrplReserve: bigint;
+        spotPrice: bigint;
       }
     ],
     "view"
   >;
 
+  getSellQuote: TypedContractMethod<
+    [creditAmountIn: BigNumberish],
+    [bigint],
+    "view"
+  >;
+
+  getSpotPrice: TypedContractMethod<[], [bigint], "view">;
+
   owner: TypedContractMethod<[], [string], "view">;
 
+  removeLiquidity: TypedContractMethod<
+    [creditAmount: BigNumberish, xrplAmount: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
   sellCredits: TypedContractMethod<
-    [amount: BigNumberish],
+    [creditAmountIn: BigNumberish],
     [void],
     "nonpayable"
   >;
 
-  sellPrice: TypedContractMethod<[], [bigint], "view">;
-
-  setBuyPrice: TypedContractMethod<
-    [newPrice: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
-
-  setSellPrice: TypedContractMethod<
-    [newPrice: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
-
-  withdrawCredits: TypedContractMethod<
-    [amount: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
-
-  withdrawXrpl: TypedContractMethod<
-    [amount: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
+  xrplReserve: TypedContractMethod<[], [bigint], "view">;
 
   xrplToken: TypedContractMethod<[], [string], "view">;
 
@@ -275,49 +359,65 @@ export interface CarbonCreditMarketplace extends BaseContract {
   ): T;
 
   getFunction(
-    nameOrSignature: "buyCredits"
-  ): TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "buyPrice"
+    nameOrSignature: "FEE_DENOMINATOR"
   ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "FEE_NUMERATOR"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "addLiquidity"
+  ): TypedContractMethod<
+    [creditAmount: BigNumberish, xrplAmount: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "buyCredits"
+  ): TypedContractMethod<[creditAmountOut: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "carbonCreditToken"
   ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "creditReserve"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "getBuyQuote"
+  ): TypedContractMethod<[creditAmountOut: BigNumberish], [bigint], "view">;
   getFunction(
     nameOrSignature: "getMarketplaceInfo"
   ): TypedContractMethod<
     [],
     [
-      [bigint, bigint, bigint, bigint] & {
-        creditBalance: bigint;
-        xrplBalance: bigint;
-        currentBuyPrice: bigint;
-        currentSellPrice: bigint;
+      [bigint, bigint, bigint] & {
+        _creditReserve: bigint;
+        _xrplReserve: bigint;
+        spotPrice: bigint;
       }
     ],
     "view"
   >;
   getFunction(
+    nameOrSignature: "getSellQuote"
+  ): TypedContractMethod<[creditAmountIn: BigNumberish], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "getSpotPrice"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
     nameOrSignature: "owner"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "removeLiquidity"
+  ): TypedContractMethod<
+    [creditAmount: BigNumberish, xrplAmount: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
     nameOrSignature: "sellCredits"
-  ): TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
+  ): TypedContractMethod<[creditAmountIn: BigNumberish], [void], "nonpayable">;
   getFunction(
-    nameOrSignature: "sellPrice"
+    nameOrSignature: "xrplReserve"
   ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "setBuyPrice"
-  ): TypedContractMethod<[newPrice: BigNumberish], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "setSellPrice"
-  ): TypedContractMethod<[newPrice: BigNumberish], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "withdrawCredits"
-  ): TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "withdrawXrpl"
-  ): TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "xrplToken"
   ): TypedContractMethod<[], [string], "view">;
@@ -337,11 +437,18 @@ export interface CarbonCreditMarketplace extends BaseContract {
     CreditsSoldEvent.OutputObject
   >;
   getEvent(
-    key: "PriceUpdated"
+    key: "LiquidityAdded"
   ): TypedContractEvent<
-    PriceUpdatedEvent.InputTuple,
-    PriceUpdatedEvent.OutputTuple,
-    PriceUpdatedEvent.OutputObject
+    LiquidityAddedEvent.InputTuple,
+    LiquidityAddedEvent.OutputTuple,
+    LiquidityAddedEvent.OutputObject
+  >;
+  getEvent(
+    key: "LiquidityRemoved"
+  ): TypedContractEvent<
+    LiquidityRemovedEvent.InputTuple,
+    LiquidityRemovedEvent.OutputTuple,
+    LiquidityRemovedEvent.OutputObject
   >;
 
   filters: {
@@ -367,15 +474,26 @@ export interface CarbonCreditMarketplace extends BaseContract {
       CreditsSoldEvent.OutputObject
     >;
 
-    "PriceUpdated(uint256,uint256)": TypedContractEvent<
-      PriceUpdatedEvent.InputTuple,
-      PriceUpdatedEvent.OutputTuple,
-      PriceUpdatedEvent.OutputObject
+    "LiquidityAdded(address,uint256,uint256)": TypedContractEvent<
+      LiquidityAddedEvent.InputTuple,
+      LiquidityAddedEvent.OutputTuple,
+      LiquidityAddedEvent.OutputObject
     >;
-    PriceUpdated: TypedContractEvent<
-      PriceUpdatedEvent.InputTuple,
-      PriceUpdatedEvent.OutputTuple,
-      PriceUpdatedEvent.OutputObject
+    LiquidityAdded: TypedContractEvent<
+      LiquidityAddedEvent.InputTuple,
+      LiquidityAddedEvent.OutputTuple,
+      LiquidityAddedEvent.OutputObject
+    >;
+
+    "LiquidityRemoved(address,uint256,uint256)": TypedContractEvent<
+      LiquidityRemovedEvent.InputTuple,
+      LiquidityRemovedEvent.OutputTuple,
+      LiquidityRemovedEvent.OutputObject
+    >;
+    LiquidityRemoved: TypedContractEvent<
+      LiquidityRemovedEvent.InputTuple,
+      LiquidityRemovedEvent.OutputTuple,
+      LiquidityRemovedEvent.OutputObject
     >;
   };
 }

@@ -26,3 +26,5 @@ export type { CarbonCredit } from "./contracts/CarbonCredit";
 export { CarbonCredit__factory } from "./factories/contracts/CarbonCredit__factory";
 export type { CarbonCreditMarketplace } from "./contracts/CarbonCreditMarketPlace.sol/CarbonCreditMarketplace";
 export { CarbonCreditMarketplace__factory } from "./factories/contracts/CarbonCreditMarketPlace.sol/CarbonCreditMarketplace__factory";
+export type { MockXRPLToken } from "./contracts/MockXRPLToken";
+export { MockXRPLToken__factory } from "./factories/contracts/MockXRPLToken__factory";

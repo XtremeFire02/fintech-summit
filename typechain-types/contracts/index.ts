@@ -4,3 +4,4 @@
 import type * as carbonCreditMarketPlaceSol from "./CarbonCreditMarketPlace.sol";
 export type { carbonCreditMarketPlaceSol };
 export type { CarbonCredit } from "./CarbonCredit";
+export type { MockXRPLToken } from "./MockXRPLToken";
